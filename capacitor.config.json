@@ -1,0 +1,12 @@
+{
+  "appId": "com.neonchess.fourplayer",
+  "appName": "Neon Four Chess",
+  "webDir": "frontend",
+  "server": {
+    "cleartext": true,
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": true
+  }
+}

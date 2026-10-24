@@ -1,0 +1,35 @@
+# Node
+node_modules/
+npm-debug.log*
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+.pytest_cache/
+
+# Databases
+*.db
+*.sqlite3
+
+# Environment
+.env
+
+# Android & Gradle
+android/.gradle/
+android/build/
+android/app/build/
+android/captures/
+android/.idea/
+*.iml
+
+# IDE & OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

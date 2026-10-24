@@ -1,0 +1,35 @@
+{
+  "name": "neon-four-chess",
+  "version": "1.0.0",
+  "description": "Neon Four Chess - 4-Player Cyberpunk Chess Game with FastAPI Backend & Capacitor Android App",
+  "main": "frontend/index.html",
+  "scripts": {
+    "start": "python backend/run.py",
+    "test": "pytest backend/tests",
+    "cap:sync": "cap sync",
+    "cap:open:android": "cap open android",
+    "cap:build:android": "cd android && ./gradlew assembleDebug"
+  },
+  "keywords": [
+    "chess",
+    "four-player-chess",
+    "cyberpunk",
+    "fastapi",
+    "websockets",
+    "capacitor",
+    "android"
+  ],
+  "author": "Antigravity Senior Full-Stack Game Dev",
+  "license": "MIT",
+  "dependencies": {
+    "@capacitor/android": "^6.1.2",
+    "@capacitor/app": "^6.0.1",
+    "@capacitor/core": "^6.1.2",
+    "@capacitor/haptics": "^6.0.1",
+    "@capacitor/keyboard": "^6.0.2",
+    "@capacitor/status-bar": "^6.0.1"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.1.2"
+  }
+}

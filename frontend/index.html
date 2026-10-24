@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#0a0a14">
+    <meta name="description" content="Neon Four Chess - Futuristic 4-Player Chess Mobile & Online Game">
+    <title>Neon Four Chess | 4-Player Battle Arena</title>
+
+    <!-- Google Fonts for Futuristic Cyberpunk Typography -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+
+    <!-- CSS Design Tokens & Layout -->
+    <link rel="stylesheet" href="css/neon-theme.css">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div id="app-root">
+        <!-- Top Navigation Header -->
+        <header id="game-header">
+            <div class="header-left">
+                <button id="btn-nav-menu" class="icon-btn" title="Main Menu">☰</button>
+                <div class="game-logo">
+                    <span class="logo-neon">NEON</span>
+                    <span class="logo-sub">FOUR CHESS</span>
+                </div>
+            </div>
+
+            <div class="header-center">
+                <div id="turn-badge" class="turn-indicator">Cyan's Turn</div>
+                <div id="room-code-tag" class="room-tag hidden">
+                    <span>ROOM:</span>
+                    <strong id="current-room-code">------</strong>
+                    <button id="btn-copy-code" class="mini-icon-btn" title="Copy Room Code">📋</button>
+                </div>
+            </div>
+
+            <div class="header-right">
+                <div id="network-indicator" class="net-indicator hidden">
+                    <span id="net-status-dot" class="status-dot offline"></span>
+                    <span id="net-status-label">OFFLINE</span>
+                </div>
+                <button id="btn-sound-toggle" class="icon-btn" title="Toggle Sound FX">🔊</button>
+                <button id="btn-nav-rules" class="icon-btn" title="Game Rules">?</button>
+                <button id="btn-nav-settings" class="icon-btn" title="Settings">⚙</button>
+            </div>
+        </header>
+
+        <!-- Player Status Bar (Top: North Lime & West/East mini) -->
+        <section class="players-hud top-hud">
+            <!-- Player 2: West Magenta -->
+            <div id="player-card-2" class="player-card player-magenta">
+                <div class="player-avatar">M</div>
+                <div class="player-meta">
+                    <div class="player-name-row">
+                        <span class="player-conn-dot online"></span>
+                        <span class="player-name">Magenta (West)</span>
+                    </div>
+                    <div class="player-status-row">
+                        <span class="status-badge waiting">WAITING</span>
+                        <div class="captured-pieces"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Player 3: North Lime -->
+            <div id="player-card-3" class="player-card player-lime">
+                <div class="player-avatar">L</div>
+                <div class="player-meta">
+                    <div class="player-name-row">
+                        <span class="player-conn-dot online"></span>
+                        <span class="player-name">Lime (North)</span>
+                    </div>
+                    <div class="player-status-row">
+                        <span class="status-badge waiting">WAITING</span>
+                        <div class="captured-pieces"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Player 4: East Gold -->
+            <div id="player-card-4" class="player-card player-gold">
+                <div class="player-avatar">G</div>
+                <div class="player-meta">
+                    <div class="player-name-row">
+                        <span class="player-conn-dot online"></span>
+                        <span class="player-name">Gold (East)</span>
+                    </div>
+                    <div class="player-status-row">
+                        <span class="status-badge waiting">WAITING</span>
+                        <div class="captured-pieces"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Main Chess Arena Viewport -->
+        <main id="board-arena">
+            <div id="board-scaler">
+                <div id="chessboard" class="chessboard-grid">
+                    <!-- 14x14 Squares generated dynamically by JS -->
+                </div>
+            </div>
+        </main>
+
+        <!-- Player Status Bar (Bottom: South Cyan) -->
+        <section class="players-hud bottom-hud">
+            <!-- Player 1: South Cyan -->
+            <div id="player-card-1" class="player-card player-cyan active-turn-card">
+                <div class="player-avatar">C</div>
+                <div class="player-meta">
+                    <div class="player-name-row">
+                        <span class="player-conn-dot online"></span>
+                        <span class="player-name">Cyan (South)</span>
+                    </div>
+                    <div class="player-status-row">
+                        <span class="status-badge thinking">THINKING</span>
+                        <div class="captured-pieces"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Quick Chat Emotes -->
+        <div class="quick-chat-bar">
+            <button class="emote-btn" data-text="Check!">🎯 Check!</button>
+            <button class="emote-btn" data-text="Good move!">⚡ Nice!</button>
+            <button class="emote-btn" data-text="Watch out!">⚠️ Caution</button>
+            <button class="emote-btn" data-text="GG!">🏆 GG</button>
+        </div>
+
+        <!-- In-Game Controls Bar -->
+        <footer id="game-controls">
+            <button id="btn-rotate" class="ctrl-btn" title="Rotate Board 90°">🔄 Rotate</button>
+            <button id="btn-undo" class="ctrl-btn" title="Undo Move (Local Mode)">↩ Undo</button>
+            <button id="btn-restart" class="ctrl-btn" title="Restart Game">🔄 Restart</button>
+            <button id="btn-resign" class="ctrl-btn resign-btn" title="Resign Match">🏳 Resign</button>
+        </footer>
+
+        <!-- Toast Notifications Container -->
+        <div id="toast-container"></div>
+
+        <!-- ==================== MODALS ==================== -->
+
+        <!-- 1. Main Menu Modal -->
+        <div id="menu-modal" class="game-modal hidden">
+            <div class="modal-card">
+                <div class="modal-header">
+                    <h2>NEON ARENA</h2>
+                    <button class="modal-close-btn">✕</button>
+                </div>
+                <div class="modal-body menu-options">
+                    <button id="btn-mode-local" class="neon-btn primary-btn">
+                        <span class="btn-icon">📱</span>
+                        <div class="btn-text">
+                            <strong>Local Pass & Play</strong>
+                            <small>4 players on this phone</small>
+                        </div>
+                    </button>
+                    <button id="btn-mode-create" class="neon-btn cyan-btn">
+                        <span class="btn-icon">⚡</span>
+                        <div class="btn-text">
+                            <strong>Create Online Room</strong>
+                            <small>Host a room with custom code</small>
+                        </div>
+                    </button>
+                    <button id="btn-mode-join" class="neon-btn magenta-btn">
+                        <span class="btn-icon">🚀</span>
+                        <div class="btn-text">
+                            <strong>Join Online Room</strong>
+                            <small>Enter a friend's room code</small>
+                        </div>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 2. Create Room Modal -->
+        <div id="create-room-modal" class="game-modal hidden">
+            <div class="modal-card">
+                <div class="modal-header">
+                    <h2>HOST ARENA</h2>
+                    <button class="modal-close-btn">✕</button>
+                </div>
+                <form id="form-create-room" class="modal-body">
+                    <div class="form-group">
+                        <label for="create-player-name">Your Commander Name:</label>
+                        <input type="text" id="create-player-name" value="Player 1" maxlength="25" required>
+                    </div>
+                    <button type="submit" class="neon-btn primary-btn submit-btn">Create & Play</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- 3. Join Room Modal -->
+        <div id="join-room-modal" class="game-modal hidden">
+            <div class="modal-card">
+                <div class="modal-header">
+                    <h2>JOIN ARENA</h2>
+                    <button class="modal-close-btn">✕</button>
+                </div>
+                <form id="form-join-room" class="modal-body">
+                    <div class="form-group">
+                        <label for="join-room-code">Room Code (6 Letters):</label>
+                        <input type="text" id="join-room-code" placeholder="e.g. NEON42" maxlength="10" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="join-player-name">Your Commander Name:</label>
+                        <input type="text" id="join-player-name" value="Player 2" maxlength="25" required>
+                    </div>
+                    <button type="submit" class="neon-btn magenta-btn submit-btn">Join Match</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- 4. Pawn Promotion Modal -->
+        <div id="promotion-modal" class="game-modal hidden">
+            <div class="modal-card promo-modal-card">
+                <h3>PROMOTE PAWN</h3>
+                <p>Select your upgrade piece:</p>
+                <div id="promotion-options" class="promo-grid">
+                    <!-- Buttons inserted dynamically -->
+                </div>
+            </div>
+        </div>
+
+        <!-- 5. Pass Device Privacy Modal -->
+        <div id="pass-device-modal" class="game-modal hidden">
+            <div class="modal-card pass-device-card">
+                <div class="pass-icon">🔄</div>
+                <h2>PASS DEVICE</h2>
+                <p>Pass the phone to <strong id="pass-next-player-name">Magenta</strong></p>
+                <button id="btn-pass-unlock" class="neon-btn primary-btn">I am Ready (Reveal Board)</button>
+            </div>
+        </div>
+
+        <!-- 6. Game Over Modal -->
+        <div id="gameover-modal" class="game-modal hidden">
+            <div class="modal-card gameover-card">
+                <h2 id="gameover-title">VICTORY!</h2>
+                <div id="gameover-details"></div>
+                <div class="modal-actions">
+                    <button id="btn-play-again" class="neon-btn primary-btn">Play Again</button>
+                    <button id="btn-gameover-menu" class="neon-btn secondary-btn">Main Menu</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 7. Game Rules Modal -->
+        <div id="rules-modal" class="game-modal hidden">
+            <div class="modal-card rules-card">
+                <div class="modal-header">
+                    <h2>FOUR-PLAYER CHESS RULES</h2>
+                    <button class="modal-close-btn">✕</button>
+                </div>
+                <div class="modal-body rules-content">
+                    <div class="rule-block">
+                        <h4>1. The 14×14 Cross Arena</h4>
+                        <p>Played on a 14×14 board with the 4 corner 3×3 areas removed (160 active squares). Armies start on the 4 banks: Cyan (South), Magenta (West), Lime (North), Gold (East).</p>
+                    </div>
+                    <div class="rule-block">
+                        <h4>2. Turn Order & Progression</h4>
+                        <p>Turns proceed <strong>clockwise</strong>: Cyan → Magenta → Lime → Gold → Cyan. When an eliminated player's turn comes, it is automatically bypassed.</p>
+                    </div>
+                    <div class="rule-block">
+                        <h4>3. Pawn Mechanics & 8th Rank Promotion</h4>
+                        <p>Pawns move forward into the arena (2 squares on their first move) and capture 1 square diagonally in their forward direction. Pawns promote to a Queen, Rook, Bishop, or Knight upon reaching the <strong>8th rank</strong> relative to their army or opposite perimeter.</p>
+                    </div>
+                    <div class="rule-block">
+                        <h4>4. Check, Checkmate & King Elimination</h4>
+                        <p>If an active enemy piece attacks your King, you are in <strong>Check</strong>! On your turn, you must make a move to resolve check. If no legal escape exists, you are <strong>Checkmated</strong> and eliminated.</p>
+                    </div>
+                    <div class="rule-block">
+                        <h4>5. Dormant Neutral Pieces</h4>
+                        <p>When a player is eliminated or resigns, their King is removed, and their remaining army becomes <strong>neutral obstacles</strong>. They do not attack or move, but can be captured.</p>
+                    </div>
+                    <div class="rule-block">
+                        <h4>6. Last Commander Standing</h4>
+                        <p>The last surviving player with their King intact wins the match!</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 8. Settings Modal -->
+        <div id="settings-modal" class="game-modal hidden">
+            <div class="modal-card">
+                <div class="modal-header">
+                    <h2>SYSTEM SETTINGS</h2>
+                    <button class="modal-close-btn">✕</button>
+                </div>
+                <div class="modal-body">
+                    <div class="setting-item">
+                        <label for="backend-url-input">Backend Server URL:</label>
+                        <small class="help-text">For Android APK or physical phones, enter server LAN IP (e.g. http://192.168.1.50:8000)</small>
+                        <div class="input-with-btn">
+                            <input type="text" id="backend-url-input" placeholder="http://localhost:8000">
+                            <button id="btn-test-backend" class="mini-btn">Test</button>
+                        </div>
+                        <div id="backend-test-status" class="test-status-msg"></div>
+                    </div>
+
+                    <div class="setting-item toggle-item">
+                        <span>Sound Effects (Sci-Fi Audio):</span>
+                        <input type="checkbox" id="sound-toggle-chk" checked>
+                    </div>
+
+                    <div class="setting-item toggle-item">
+                        <span>Pass Device Privacy Screen (Local Mode):</span>
+                        <input type="checkbox" id="pass-prompt-chk">
+                    </div>
+
+                    <div class="setting-item toggle-item">
+                        <span>Auto-Rotate Board to Active Player:</span>
+                        <input type="checkbox" id="rotate-board-chk">
+                    </div>
+
+                    <button id="btn-save-settings" class="neon-btn primary-btn submit-btn">Save Preferences</button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Scripts -->
+    <script src="js/config.js"></script>
+    <script src="js/audio.js"></script>
+    <script src="js/chess-engine-client.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/ws-client.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>

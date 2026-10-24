@@ -1,0 +1,65 @@
+/**
+ * Neon Four Chess - Futuristic Theme & Color Tokens
+ */
+
+:root {
+    /* Base Backgrounds */
+    --bg-main: #07080e;
+    --bg-surface: #0e111d;
+    --bg-surface-elevated: #151a2d;
+    --bg-glass: rgba(18, 22, 38, 0.75);
+
+    /* Player Neon Colors */
+    --color-cyan: #00f3ff;
+    --color-cyan-glow: rgba(0, 243, 255, 0.45);
+    --color-magenta: #ff007f;
+    --color-magenta-glow: rgba(255, 0, 127, 0.45);
+    --color-lime: #39ff14;
+    --color-lime-glow: rgba(57, 255, 20, 0.45);
+    --color-gold: #ffd700;
+    --color-gold-glow: rgba(255, 215, 0, 0.45);
+
+    /* Board Squares */
+    --board-border: #1e243d;
+    --board-light: #161c33;
+    --board-dark: #0d1222;
+    --board-void: #05060a;
+
+    /* Status Colors */
+    --color-danger: #ff2a2a;
+    --color-danger-glow: rgba(255, 42, 42, 0.6);
+    --color-success: #00ffaa;
+    --color-text-primary: #f0f4fc;
+    --color-text-secondary: #8c97b8;
+    --color-text-muted: #545e7d;
+
+    /* Typography */
+    --font-heading: 'Orbitron', -apple-system, sans-serif;
+    --font-body: 'Rajdhani', -apple-system, sans-serif;
+
+    /* Transitions */
+    --transition-fast: 0.15s ease;
+    --transition-smooth: 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Player Themes */
+.player-1, .player-cyan {
+    color: var(--color-cyan);
+    --glow-color: var(--color-cyan-glow);
+}
+.player-2, .player-magenta {
+    color: var(--color-magenta);
+    --glow-color: var(--color-magenta-glow);
+}
+.player-3, .player-lime {
+    color: var(--color-lime);
+    --glow-color: var(--color-lime-glow);
+}
+.player-4, .player-gold {
+    color: var(--color-gold);
+    --glow-color: var(--color-gold-glow);
+}
+.dormant {
+    color: #555c70 !important;
+    opacity: 0.5;
+}
