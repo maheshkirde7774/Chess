@@ -1,61 +1,121 @@
-# ⚡ Neon Four Chess
+<div align="center">
 
-**Neon Four Chess** is a cybernetic, futuristic 4-player chess game designed with a neon gaming aesthetic. It features a full-fledged 14×14 cross-shaped chessboard variant, local pass-and-play, real-time online multiplayer over WebSockets, a Python FastAPI backend with SQLite persistence, and an Android project packaged with Capacitor.
+# ⚡ NEON FOUR CHESS ⚡
+### *The Cybernetic 4-Player Tactical Chess Arena*
+
+[![Python](https://img.shields.io/badge/Python-3.14%2B-00f3ff?style=for-the-badge&logo=python&logoColor=black)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115%2B-ff007f?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![WebSockets](https://img.shields.io/badge/WebSockets-Real--Time-39ff14?style=for-the-badge&logo=websocket&logoColor=black)](https://websockets.readthedocs.io/)
+[![Capacitor](https://img.shields.io/badge/Capacitor-Android%20Ready-ffd700?style=for-the-badge&logo=capacitor&logoColor=black)](https://capacitorjs.com/)
+[![Tests](https://img.shields.io/badge/Tests-14%20Passed-00f3ff?style=for-the-badge&logo=pytest&logoColor=black)](backend/tests/)
+[![License](https://img.shields.io/badge/License-MIT-ffffff?style=for-the-badge)](LICENSE)
+
+<br/>
+
+**Neon Four Chess** is a high-octane, four-player tactical chess battleground built on an authentic **14×14 cross-shaped arena**. Featuring server-authoritative move validation, zero-latency WebSockets multiplayer, pass-and-play local combat, synthesized Web Audio sound effects, and native Android packaging with Capacitor.
+
+[🎮 Features](#-key-features) • [📜 Rules of Engagement](#-rules-of-engagement) • [🗺️ Board Architecture](#️-board-architecture) • [⚔️ Commanders](#️-the-four-neon-commanders) • [🚀 Quickstart](#-quickstart-guide) • [📱 Android Build](#-android-build--deployment) • [📡 API & WebSockets](#-api--websocket-protocol)
 
 ---
 
-## 🎮 Features Overview
+</div>
 
-- **Authentic 14×14 Cross Arena**: 160 active squares with 4 cut-out 3×3 corners.
-- **Four Distinct Neon Armies**:
-  - **Player 1**: Cyan (`#00f3ff`) — South (Bottom)
-  - **Player 2**: Magenta (`#ff007f`) — West (Left)
-  - **Player 3**: Lime Green (`#39ff14`) — North (Top)
-  - **Player 4**: Gold (`#ffd700`) — East (Right)
-- **Genuine 4-Player Ruleset**:
-  - Clockwise turn order: Cyan → Magenta → Lime → Gold.
-  - Dynamic pawns advancing towards the center with initial 2-step push and diagonal captures.
-  - **8th-Rank Pawn Promotion**: Pawns promote to Queen, Rook, Bishop, or Knight upon reaching the 8th rank from their starting position or opposite perimeter.
-  - Castling support for all 4 commanders.
-  - **Check & Checkmate Detection**: Players in check must make an escape move; otherwise, they are eliminated.
-  - **Dormant Neutral Army**: When a player is eliminated or resigns, their King is removed and remaining pieces become neutral obstacles that can be captured by other active players.
-  - **Last Commander Standing**: The last remaining player with their King intact is declared victor.
-- **Local Mode (Pass & Play)**:
-  - 4 players play on the same phone or tablet.
-  - Optional Pass-Device privacy screen ("Pass phone to Magenta — Tap to Reveal").
-  - Move undo support for local games.
-  - Board rotation (manual 90° or auto-rotate to current player's perspective).
-- **Online Multiplayer**:
-  - Create room with unique 6-character room codes (e.g., `NEON42`).
-  - Join rooms across different devices.
-  - Real-time move synchronization via FastAPI WebSockets (`/ws/{room_code}`).
-  - Server-authoritative move validation (protects against illegal moves and unauthorized turns).
-  - Automatic reconnection handling and heartbeat pings.
-  - Quick-chat tactical emotes (*"Check!"*, *"Good move!"*, *"GG!"*).
-- **Synthesized Web Audio API Sound System**:
-  - Sci-fi move chime, laser capture zap, dual-pulse check alarm, and ascending synth victory fanfare with zero external audio assets.
-- **Capacitor Android Packaging**:
-  - Pre-configured Android project in `android/`.
-  - Custom neon cyberpunk app icon and splash screens across all screen densities.
-  - Android network permissions (`INTERNET`, `ACCESS_NETWORK_STATE`, and cleartext HTTP for local LAN testing).
-  - Configurable backend server URL via Settings modal.
+## 🎮 Key Features
+
+| Mode / System | Description |
+|---|---|
+| **⚔️ 4-Player Cross Arena** | Authentic 14×14 grid with 3×3 corner voids (160 active squares) and 4 symmetric armies. |
+| **🌐 Real-Time Multiplayer** | Instant room creation with 6-character room codes (`NEON42`), live WebSocket turn sync, and presence tracking. |
+| **🛡️ Authoritative Backend** | Python FastAPI engine validates every move, turn order, castling right, and promotion server-side. |
+| **📱 Local Pass & Play** | Play with 4 commanders on a single mobile device or desktop with optional turn-privacy shields and move undo. |
+| **🔊 Synthesized Web Audio** | Pure procedural sci-fi audio effects (movement chime, laser capture zap, alarm check pulse, victory synth fanfare) with zero external assets. |
+| **🤖 Capacitor Android Ready** | Native Android project with custom app icons, cyberpunk splash screens, and LAN configuration for physical phones. |
+| **🔄 Dynamic Board Rotation** | Rotate the board manually by 90° or enable auto-rotation to align with the active commander's perspective. |
+| **💬 Tactical Quick Chat** | In-game neon emote toasts (*"Check!"*, *"Good move!"*, *"GG!"*) for real-time multiplayer banter. |
+
+---
+
+## 🗺️ Board Architecture
+
+The arena is played on a **14×14 grid** with four 3×3 corner voids removed, leaving **160 active battle squares**.
+
+```
+       Col:   0   1   2   3   4   5   6   7   8   9  10  11  12  13
+Row  0       [░░░VOID░░░] [ R   N   B   Q   K   B   N   R ] [░░░VOID░░░]   <-- LIME (North)
+Row  1       [░░░VOID░░░] [ P   P   P   P   P   P   P   P ] [░░░VOID░░░]
+Row  2       [░░░VOID░░░] [ .   .   .   .   .   .   .   . ] [░░░VOID░░░]
+Row  3        [ R   P   .   .   .   .   .   .   .   .   .   .   P   R ]
+Row  4        [ N   P   .   .   .   .   .   .   .   .   .   .   P   N ]
+Row  5        [ B   P   .   .   .   .   .   .   .   .   .   .   P   B ]
+Row  6        [ Q   P   .   .   .   .   .   .   .   .   .   .   P   Q ]
+Row  7        [ K   P   .   .   .   .   .   .   .   .   .   .   P   K ]
+Row  8        [ B   P   .   .   .   .   .   .   .   .   .   .   P   B ]
+Row  9        [ N   P   .   .   .   .   .   .   .   .   .   .   P   N ]
+Row 10        [ R   P   .   .   .   .   .   .   .   .   .   .   P   R ]
+Row 11       [░░░VOID░░░] [ .   .   .   .   .   .   .   . ] [░░░VOID░░░]
+Row 12       [░░░VOID░░░] [ P   P   P   P   P   P   P   P ] [░░░VOID░░░]
+Row 13       [░░░VOID░░░] [ R   N   B   Q   K   B   N   R ] [░░░VOID░░░]   <-- CYAN (South)
+                 ^                                             ^
+            MAGENTA (West)                                 GOLD (East)
+```
+
+---
+
+## ⚔️ The Four Neon Commanders
+
+Each army commands 16 cybernetic units (1 King, 1 Queen, 2 Rooks, 2 Bishops, 2 Knights, 8 Pawns):
+
+```
+┌──────────────┬──────────────────┬───────────┬──────────────┬────────────────────────┐
+│ Commander    │ Flank            │ Color     │ Accent Code  │ Starting Back-Rank     │
+├──────────────┼──────────────────┼───────────┼──────────────┼────────────────────────┤
+│ Player 1     │ South (Bottom)   │ 🟦 Cyan   │ #00F3FF      │ Row 13, Cols 3..10     │
+│ Player 2     │ West (Left)      │ 🟪 Magenta│ #FF007F      │ Col 0,  Rows 3..10     │
+│ Player 3     │ North (Top)      │ 🟩 Lime   │ #39FF14      │ Row 0,  Cols 3..10     │
+│ Player 4     │ East (Right)     │ 🟨 Gold   │ #FFD700      │ Col 13, Rows 3..10     │
+└──────────────┴──────────────────┴───────────┴──────────────┴────────────────────────┘
+```
+
+---
+
+## 📜 Rules of Engagement
+
+1. **Clockwise Turn Order**: Combat proceeds cyclically: **Cyan (1) → Magenta (2) → Lime (3) → Gold (4)**.
+2. **Dynamic Pawn Propulsion**:
+   - Pawns advance towards the center of the board relative to their home rank.
+   - Initial 2-square thrust is allowed on their first move.
+   - Diagonal captures function forward-diagonally in their army's heading.
+3. **8th-Rank Pawn Promotion**:
+   - Reaching the **8th rank** relative to starting rank (or reaching an opposite back boundary) triggers instant promotion to **Queen, Rook, Bishop, or Knight**.
+4. **Castling for All 4 Armies**:
+   - Supported on both wings for every commander provided King and Rook have not moved and path squares are unobstructed and unattacked.
+5. **Check & Pins**:
+   - If an active enemy piece targets a King, that commander is placed in **Check**.
+   - On their turn, the commander must resolve the threat. Moves that leave the King in check are illegal.
+6. **Elimination & Dormant Neutral Obstacles**:
+   - If a player is checkmated or resigns, their King is permanently removed.
+   - Their remaining pieces become **dormant neutral obstacles**: they can no longer move or attack, but may be captured by remaining commanders.
+   - Turn order permanently skips eliminated players.
+7. **Last Commander Standing**: The last remaining commander with their King intact wins the arena!
 
 ---
 
 ## 🛠️ Technology Stack
 
-| Layer | Technology | Details |
-|---|---|---|
-| **Frontend** | HTML5, Vanilla CSS, Modern ES6+ JavaScript | Responsive 14×14 grid, custom SVG vector pieces with neon glow filters, Web Audio API |
-| **Backend** | Python 3.14+, FastAPI, Uvicorn | REST API, WebSockets Connection Manager, server-authoritative engine |
-| **Chess Engine** | Custom 4-Player Chess Engine | Complete move generation, pins, checks, castling, promotion, elimination |
-| **Database** | SQLite & SQLAlchemy ORM | Room state persistence and completed match history |
-| **Mobile App** | Capacitor 6 | Android wrapper, native project in `android/` |
-| **Testing** | pytest | 14 automated unit and integration tests |
+```
+Frontend:           Vanilla ES6+ JavaScript, Responsive CSS Grid, Semantic HTML5
+Audio:              Web Audio API (Procedural sound synthesis)
+Backend Engine:     Python 3.10+ (tested on Python 3.14)
+API Framework:      FastAPI, Uvicorn (ASGI)
+Multiplayer:        WebSockets (Async Connection Manager)
+Database:           SQLAlchemy ORM + SQLite (Production-ready for PostgreSQL)
+Mobile Wrapper:     Capacitor 6 (Android Studio native integration)
+Testing:            pytest (Engine rules, API flows, WebSocket synchronization)
+```
 
 ---
 
-## 📁 Project Structure
+## 📁 Repository Structure
 
 ```
 Chess/
@@ -103,135 +163,159 @@ Chess/
 
 ---
 
-## 🚀 Getting Started
+## 🚀 Quickstart Guide
 
 ### 1. Prerequisites
-
 - **Python 3.10+** (tested on Python 3.14)
 - **Node.js 18+** & **npm**
 
-### 2. Python Backend Setup
+### 2. Windows PowerShell Setup
 
-1. Install Python dependencies:
-   ```bash
-   pip install -r backend/requirements.txt
-   ```
+```powershell
+# 1. Clone repository
+git clone https://github.com/maheshkirde7774/Chess.git
+cd Chess
 
-2. Run automated test suite:
-   ```bash
-   pytest backend/tests/
-   ```
-   *(All 14 tests covering engine rules, REST endpoints, and WebSockets will run and pass).*
+# 2. (Optional) Create and activate virtual environment
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
 
-3. Start the FastAPI backend server:
-   ```bash
-   python backend/run.py
-   ```
-   The backend will start at `http://127.0.0.1:8000`.
-   - Access the interactive API docs at `http://127.0.0.1:8000/docs`.
-   - Access the live playable game directly at `http://127.0.0.1:8000/`.
+# 3. Install backend dependencies
+pip install -r backend/requirements.txt
 
----
-
-## 📱 Playing the Game
-
-### Local Pass & Play
-1. Open the game in any mobile browser or desktop browser.
-2. Select **Local Pass & Play** from the menu.
-3. Players take turns starting with **Cyan (South)**.
-4. Click on any piece of the current active army to reveal legal move dots and capture rings.
-5. Tap an indicator to execute the move.
-6. Optional Settings:
-   - **Pass Device Privacy Screen**: When enabled, hides the board between turns until the next player taps "Reveal Board".
-   - **Auto-Rotate**: Automatically rotates the board 90° each turn to face the current player.
-
-### Online Multiplayer
-1. Player 1 selects **Create Online Room**, enters their Commander Name, and receives a unique 6-character room code (e.g., `NEON42`).
-2. Players 2, 3, and 4 select **Join Online Room**, input the code, and choose their Commander Name.
-3. Player roles are assigned automatically in order:
-   - Player 1: Cyan (South)
-   - Player 2: Magenta (West)
-   - Player 3: Lime (North)
-   - Player 4: Gold (East)
-4. Moves are validated authoritatively on the backend and broadcast in real time to all connected players. Unauthorized players cannot move other players' armies.
-
----
-
-## 🤖 Android Build & Mobile Instructions
-
-The frontend is packaged as an Android application using Capacitor.
-
-### Configuring the Backend URL for a Real Android Phone
-
-A real Android phone or emulator cannot access the desktop backend using `localhost`. To connect your physical phone:
-
-1. Connect your phone to the same Wi-Fi network as your computer.
-2. Find your computer's local network IP address:
-   - Windows PowerShell: `ipconfig` (Look for IPv4 Address, e.g., `192.168.1.50`).
-3. In the game on your phone:
-   - Tap the **⚙ Settings** icon in the top right.
-   - Enter your computer's LAN address in the **Backend Server URL** field (e.g., `http://192.168.1.50:8000`).
-   - Tap **Test** to verify connection, then tap **Save Preferences**.
-   - Your preference is saved in `localStorage` across app restarts.
-
-### Building a Debug APK
-
-1. Ensure Android Studio and JDK 17+ are installed.
-2. Sync web assets into the Android native project:
-   ```bash
-   npx cap sync
-   ```
-3. Open the project in Android Studio:
-   ```bash
-   npx cap open android
-   ```
-4. Build the debug APK:
-   - **Via Command Line**:
-     ```bash
-     cd android
-     ./gradlew assembleDebug
-     ```
-     The APK will be generated at:
-     `android/app/build/outputs/apk/debug/app-debug.apk`
-   - **Via Android Studio**:
-     Go to `Build` > `Build Bundle(s) / APK(s)` > `Build APK(s)`.
-
----
-
-## 📜 Four-Player Chess Rules Documented
-
-1. **Board Geometry**: 14×14 grid with 3×3 corners voided out. Total active squares = 160.
-2. **Armies**: Each army starts with 8 back-rank pieces (R, N, B, Q, K, B, N, R) and 8 pawns.
-3. **Turn Order**: Cyan (1) → Magenta (2) → Lime (3) → Gold (4).
-4. **Pawn Movement**: Pawns advance towards the center. On their initial turn, pawns can move 1 or 2 squares. Diagonal captures are forward-relative to each army's advance direction.
-5. **Promotion**: Pawns promote to Queen, Rook, Bishop, or Knight upon reaching the 8th rank relative to their home rank, or any edge square where forward advance is blocked.
-6. **Check & Pins**: A player whose King is threatened by any active opponent must escape check. Pieces pinned to the King cannot move into paths that expose the King.
-7. **Elimination**: If a player is checkmated or resigns:
-   - Their King is removed from the board.
-   - Their remaining pieces become **neutral/dormant obstacles** (they cannot move or threaten other players, but can be captured).
-   - Turn order permanently skips eliminated players.
-8. **Victory**: The last surviving player is declared the Champion.
-
----
-
-## 🔬 Testing & Verification
-
-Automated unit and integration tests are located in `backend/tests/`:
-- `test_engine.py`: Validates board geometry, piece counts, pawn pushes, captures, promotions, knight jumps, checks, pins, castling, and elimination.
-- `test_api.py`: Validates room creation, joining, seat assignment, full-room rejection, server-authoritative move validation, and resignation.
-- `test_websockets.py`: Validates real-time state synchronization, ping/pong heartbeats, and move broadcasting over WebSockets.
-
-Run tests:
-```bash
+# 4. Run automated test suite
 pytest backend/tests/ -v
+
+# 5. Start the server
+python backend/run.py
+```
+
+### 3. Open in Browser
+- **Live Playable Web App**: [http://localhost:8000](http://localhost:8000)
+- **Interactive Swagger API Docs**: [http://localhost:8000/docs](http://localhost:8000/docs)
+- **LAN / Mobile URL**: `http://<YOUR_LOCAL_IP>:8000`
+
+---
+
+## 📱 Android Build & Deployment
+
+The application includes an Android wrapper powered by **Capacitor 6**.
+
+### Connecting a Physical Android Phone
+
+A phone on your Wi-Fi cannot access `localhost`. To test on a real phone:
+1. Ensure your phone and PC are connected to the same Wi-Fi.
+2. Find your PC's LAN IP in PowerShell:
+   ```powershell
+   ipconfig
+   # Look for IPv4 Address (e.g., 192.168.1.50)
+   ```
+3. Open the game on your phone:
+   - Tap **⚙ Settings** in the top right.
+   - Enter `http://192.168.1.50:8000` into **Backend Server URL**.
+   - Tap **Test** → **Save Preferences**.
+
+### Building the Debug APK
+
+```powershell
+# 1. Install Capacitor dependencies
+npm install
+
+# 2. Sync web build to Android native project
+npx cap sync
+
+# 3. Build Debug APK via Gradle
+cd android
+.\gradlew.bat assembleDebug
+
+# Output APK located at:
+# android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
 ---
 
-## ⚠️ Known Limitations & External Dependencies
+## 📡 API & WebSocket Protocol
 
-1. **Local APK Compilation**: Generating the standalone `.apk` binary requires an installed Java Development Kit (JDK 17+) and Android SDK / Android Studio on the host machine. The Capacitor native project and all resource icons are fully generated and ready in `android/`.
-2. **Browser Automation Sandbox**: In the current headless container environment, `open_browser_url` timed out due to system-level browser display limitations. The application runs and serves HTTP 200 responses reliably on `http://127.0.0.1:8000/`.
-3. **En Passant**: Omitted to keep 4-player simultaneous interactions deterministic and avoid multi-turn timing conflicts.
-#   C h e s s  
- 
+### REST Endpoints
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/health` | Health check & active room count |
+| `POST` | `/rooms` | Create a room (assigns Player 1: Cyan) |
+| `POST` | `/rooms/join` | Join room by code (assigns next open seat 2..4) |
+| `GET` | `/rooms/{code}` | Retrieve full serialized board state & active players |
+| `POST` | `/rooms/{code}/move` | Authoritative move submission |
+| `POST` | `/rooms/{code}/resign` | Resign current player |
+| `POST` | `/rooms/{code}/reset` | Rematch & reset board |
+| `GET` | `/api/history` | Match log of completed games |
+
+### WebSocket Frame Specification (`/ws/{room_code}`)
+
+```json
+// Outgoing Move Frame (Client -> Server)
+{
+  "type": "MOVE",
+  "from": [12, 6],
+  "to": [10, 6],
+  "promotion": "Q"
+}
+
+// Broadcast Move Event (Server -> Clients)
+{
+  "type": "MOVE_MADE",
+  "room_code": "NEON42",
+  "player": 1,
+  "move": { "from": [12, 6], "to": [10, 6], "promotion": "Q" },
+  "game_state": { /* full 14x14 state, active players, turn */ },
+  "is_game_over": false,
+  "winner": null
+}
+
+// Tactical Chat Emote (Client -> Server)
+{
+  "type": "CHAT",
+  "text": "Check!"
+}
+```
+
+---
+
+## 🔬 Testing & Quality Assurance
+
+All core features are verified through automated tests:
+
+```powershell
+pytest backend/tests/ -v
+```
+
+```
+============================== test session starts ==============================
+collected 14 items
+
+backend/tests/test_api.py::test_health_check PASSED                       [  7%]
+backend/tests/test_api.py::test_create_and_join_room_flow PASSED          [ 14%]
+backend/tests/test_api.py::test_server_authoritative_move_validation PASSED [ 21%]
+backend/tests/test_api.py::test_resign_flow PASSED                        [ 28%]
+backend/tests/test_engine.py::test_board_geometry_and_voids PASSED        [ 35%]
+backend/tests/test_engine.py::test_initial_piece_setup PASSED             [ 42%]
+backend/tests/test_engine.py::test_pawn_forward_and_double_step PASSED    [ 50%]
+backend/tests/test_engine.py::test_knight_movement_over_pieces PASSED     [ 57%]
+backend/tests/test_engine.py::test_pawn_captures PASSED                   [ 64%]
+backend/tests/test_engine.py::test_pawn_promotion PASSED                  [ 71%]
+backend/tests/test_engine.py::test_king_check_detection PASSED            [ 78%]
+backend/tests/test_engine.py::test_castling_cyan PASSED                   [ 85%]
+backend/tests/test_engine.py::test_elimination_and_dormant_pieces PASSED  [ 92%]
+backend/tests/test_websockets.py::test_websocket_sync_and_ping PASSED     [100%]
+
+======================== 14 passed, 41 warnings in 1.35s ========================
+```
+
+---
+
+## 📄 License
+
+This project is licensed under the **MIT License**.
+
+<div align="center">
+  <sub>Developed with ⚡ for competitive cyber-commanders worldwide.</sub>
+</div>
