@@ -233,3 +233,5 @@ pytest backend/tests/ -v
 1. **Local APK Compilation**: Generating the standalone `.apk` binary requires an installed Java Development Kit (JDK 17+) and Android SDK / Android Studio on the host machine. The Capacitor native project and all resource icons are fully generated and ready in `android/`.
 2. **Browser Automation Sandbox**: In the current headless container environment, `open_browser_url` timed out due to system-level browser display limitations. The application runs and serves HTTP 200 responses reliably on `http://127.0.0.1:8000/`.
 3. **En Passant**: Omitted to keep 4-player simultaneous interactions deterministic and avoid multi-turn timing conflicts.
+#   C h e s s  
+ 
