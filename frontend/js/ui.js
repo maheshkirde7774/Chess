@@ -188,10 +188,38 @@ class ChessUI {
         this.clockInterval = null;
 
         this.boardContainer = document.getElementById("chessboard");
+        this.boardScaler = document.getElementById("board-scaler");
+        this.boardArena = document.getElementById("board-arena");
         this.turnBadge = document.getElementById("turn-badge");
 
         this.initBoardDOM();
         this.startChessClocks();
+        this.initResizeObserver();
+    }
+
+    initResizeObserver() {
+        if (typeof ResizeObserver !== "undefined" && this.boardArena) {
+            const ro = new ResizeObserver(() => {
+                this.resizeBoard();
+            });
+            ro.observe(this.boardArena);
+        } else {
+            window.addEventListener("resize", () => this.resizeBoard());
+        }
+        // Initial sizing run
+        setTimeout(() => this.resizeBoard(), 50);
+    }
+
+    resizeBoard() {
+        if (!this.boardArena || !this.boardScaler) return;
+        const rect = this.boardArena.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) return;
+        // Keep a neat 4px margin so the board rim never touches borders
+        const available = Math.floor(Math.min(rect.width, rect.height) - 4);
+        if (available > 120) {
+            this.boardScaler.style.width = `${available}px`;
+            this.boardScaler.style.height = `${available}px`;
+        }
     }
 
     initBoardDOM() {
@@ -538,6 +566,12 @@ class ChessUI {
                     checkBadge.textContent = "WAITING";
                     checkBadge.className = "status-badge waiting";
                 }
+            }
+
+            // Digital clock active turn state
+            const clockEl = document.getElementById(`clock-p${p}`);
+            if (clockEl) {
+                clockEl.classList.toggle("active-clock", isCurrent);
             }
         }
 

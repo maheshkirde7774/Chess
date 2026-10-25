@@ -236,135 +236,160 @@
             <!-- VIEW 2: GAME ARENA SCREEN (FOUR-PLAYER CHESSBOARD) -->
             <section id="view-game" class="app-view">
                 
-                <!-- In-Game Subheader -->
+                <!-- Compact Arena Header Subbar -->
                 <div class="arena-subheader">
                     <div class="arena-match-type">
                         <span class="arena-indicator-dot"></span>
                         <span id="arena-mode-label">4-Player Blitz (10+0)</span>
                     </div>
                     <div class="arena-actions">
-                        <button id="btn-toggle-notation" class="icon-pill-btn" title="Move Notation">
+                        <button id="btn-toggle-reactions" class="icon-pill-btn" title="Toggle Quick Reactions">
+                            <span>💬</span> Reactions
+                        </button>
+                        <button id="btn-toggle-notation" class="icon-pill-btn" title="Move History">
                             <span>📜</span> Notation
                         </button>
                     </div>
                 </div>
 
-                <!-- Top HUD: North (Lime), West (Magenta), East (Gold) -->
-                <section class="players-hud top-hud">
-                    <!-- Player 2: West Magenta -->
-                    <div id="player-card-2" class="player-card player-magenta">
-                        <div class="player-avatar-slot">
-                            <div class="avatar-circle">M</div>
-                            <span class="player-conn-dot offline"></span>
-                        </div>
-                        <div class="player-meta">
-                            <div class="player-name-row">
-                                <span class="player-name">Magenta</span>
-                                <span class="player-rating">1520</span>
-                            </div>
-                            <div class="player-status-row">
-                                <span class="status-badge waiting">WAITING</span>
-                                <div class="player-clock" id="clock-p2">10:00</div>
-                            </div>
-                            <div class="captured-pieces"></div>
-                        </div>
-                    </div>
-
-                    <!-- Player 3: North Lime -->
-                    <div id="player-card-3" class="player-card player-lime">
-                        <div class="player-avatar-slot">
-                            <div class="avatar-circle">L</div>
-                            <span class="player-conn-dot offline"></span>
-                        </div>
-                        <div class="player-meta">
-                            <div class="player-name-row">
-                                <span class="player-name">Lime</span>
-                                <span class="player-rating">1560</span>
-                            </div>
-                            <div class="player-status-row">
-                                <span class="status-badge waiting">WAITING</span>
-                                <div class="player-clock" id="clock-p3">10:00</div>
-                            </div>
-                            <div class="captured-pieces"></div>
-                        </div>
-                    </div>
-
-                    <!-- Player 4: East Gold -->
-                    <div id="player-card-4" class="player-card player-gold">
-                        <div class="player-avatar-slot">
-                            <div class="avatar-circle">G</div>
-                            <span class="player-conn-dot offline"></span>
-                        </div>
-                        <div class="player-meta">
-                            <div class="player-name-row">
-                                <span class="player-name">Gold</span>
-                                <span class="player-rating">1505</span>
-                            </div>
-                            <div class="player-status-row">
-                                <span class="status-badge waiting">WAITING</span>
-                                <div class="player-clock" id="clock-p4">10:00</div>
-                            </div>
-                            <div class="captured-pieces"></div>
-                        </div>
-                    </div>
-                </section>
-
-                <!-- Center 14x14 Chessboard Arena -->
-                <main id="board-arena">
-                    <div id="board-scaler">
-                        <div id="chessboard" class="chessboard-grid">
-                            <!-- 14x14 Squares generated dynamically by JS -->
-                        </div>
-                    </div>
-                </main>
-
-                <!-- Bottom HUD: South Cyan (User / P1) -->
-                <section class="players-hud bottom-hud">
-                    <div id="player-card-1" class="player-card player-cyan active-turn-card">
-                        <div class="player-avatar-slot">
-                            <div class="avatar-circle">C</div>
-                            <span class="player-conn-dot online"></span>
-                        </div>
-                        <div class="player-meta">
-                            <div class="player-name-row">
-                                <span class="player-name" id="hud-p1-name">Cyan (South)</span>
-                                <span class="player-rating" id="hud-p1-rating">1540</span>
-                            </div>
-                            <div class="player-status-row">
-                                <span class="status-badge thinking">YOUR TURN</span>
-                                <div class="player-clock active-clock" id="clock-p1">10:00</div>
-                            </div>
-                            <div class="captured-pieces"></div>
-                        </div>
-                    </div>
-                </section>
-
-                <!-- Move Notation Slide-Over Drawer -->
-                <div id="notation-drawer" class="notation-drawer hidden">
-                    <div class="notation-header">
-                        <h4>TOURNAMENT NOTATION</h4>
-                        <button id="btn-close-notation" class="mini-icon-btn">✕</button>
-                    </div>
-                    <div id="move-history-list" class="notation-body">
-                        <!-- Move items inserted dynamically -->
-                    </div>
-                </div>
-
-                <!-- Quick Chat Emotes Bar -->
-                <div class="quick-chat-bar">
+                <!-- Collapsible Reactions Popover Bar -->
+                <div id="arena-reactions-bar" class="arena-reactions-bar hidden">
                     <button class="emote-btn" data-text="Good move!">👍 Nice Move</button>
                     <button class="emote-btn" data-text="Checkmate threat!">🎯 Threat!</button>
                     <button class="emote-btn" data-text="Well played!">⚡ Well Played</button>
                     <button class="emote-btn" data-text="Good game!">🏆 GG</button>
                 </div>
 
-                <!-- In-Game Controls Footer -->
-                <footer id="game-controls">
+                <!-- Arena Main Content Area (Arena Stage + Desktop Notation Sidebar) -->
+                <div class="arena-workspace">
+
+                    <!-- 4-Player Arena Surrounding Grid Stage -->
+                    <div class="arena-stage">
+                        
+                        <!-- NORTH: Player 3 (Lime Green) - Top Center -->
+                        <div class="arena-player-north">
+                            <div id="player-card-3" class="player-card player-lime card-horizontal">
+                                <div class="player-avatar-slot">
+                                    <div class="avatar-circle">L</div>
+                                    <span class="player-conn-dot offline"></span>
+                                </div>
+                                <div class="player-meta">
+                                    <div class="player-name-row">
+                                        <div class="name-with-side">
+                                            <span class="player-side-pill">NORTH</span>
+                                            <span class="player-name">Lime</span>
+                                        </div>
+                                        <span class="player-rating">1560</span>
+                                    </div>
+                                    <div class="player-status-row">
+                                        <span class="status-badge waiting">WAITING</span>
+                                        <div class="player-clock" id="clock-p3">10:00</div>
+                                    </div>
+                                </div>
+                                <div class="captured-pieces"></div>
+                            </div>
+                        </div>
+
+                        <!-- WEST: Player 2 (Magenta) - Left Flank -->
+                        <div class="arena-player-west">
+                            <div id="player-card-2" class="player-card player-magenta card-side">
+                                <div class="player-avatar-slot">
+                                    <div class="avatar-circle">M</div>
+                                    <span class="player-conn-dot offline"></span>
+                                </div>
+                                <div class="player-meta">
+                                    <span class="player-side-pill">WEST</span>
+                                    <div class="player-name-row">
+                                        <span class="player-name">Magenta</span>
+                                        <span class="player-rating">1520</span>
+                                    </div>
+                                    <div class="player-status-row">
+                                        <span class="status-badge waiting">WAITING</span>
+                                        <div class="player-clock" id="clock-p2">10:00</div>
+                                    </div>
+                                </div>
+                                <div class="captured-pieces"></div>
+                            </div>
+                        </div>
+
+                        <!-- CENTER: 14x14 Chessboard Cross Arena -->
+                        <main id="board-arena" class="arena-center-board">
+                            <div id="board-scaler">
+                                <div id="chessboard" class="chessboard-grid">
+                                    <!-- 14x14 Squares generated dynamically by JS -->
+                                </div>
+                            </div>
+                        </main>
+
+                        <!-- EAST: Player 4 (Gold) - Right Flank -->
+                        <div class="arena-player-east">
+                            <div id="player-card-4" class="player-card player-gold card-side">
+                                <div class="player-avatar-slot">
+                                    <div class="avatar-circle">G</div>
+                                    <span class="player-conn-dot offline"></span>
+                                </div>
+                                <div class="player-meta">
+                                    <span class="player-side-pill">EAST</span>
+                                    <div class="player-name-row">
+                                        <span class="player-name">Gold</span>
+                                        <span class="player-rating">1505</span>
+                                    </div>
+                                    <div class="player-status-row">
+                                        <span class="status-badge waiting">WAITING</span>
+                                        <div class="player-clock" id="clock-p4">10:00</div>
+                                    </div>
+                                </div>
+                                <div class="captured-pieces"></div>
+                            </div>
+                        </div>
+
+                        <!-- SOUTH: Player 1 (Cyan / You) - Bottom Center -->
+                        <div class="arena-player-south">
+                            <div id="player-card-1" class="player-card player-cyan card-horizontal active-turn-card">
+                                <div class="player-avatar-slot">
+                                    <div class="avatar-circle">C</div>
+                                    <span class="player-conn-dot online"></span>
+                                </div>
+                                <div class="player-meta">
+                                    <div class="player-name-row">
+                                        <div class="name-with-side">
+                                            <span class="player-side-pill">SOUTH</span>
+                                            <span class="player-name" id="hud-p1-name">Cyan</span>
+                                        </div>
+                                        <span class="player-rating" id="hud-p1-rating">1540</span>
+                                    </div>
+                                    <div class="player-status-row">
+                                        <span class="status-badge thinking">YOUR TURN</span>
+                                        <div class="player-clock active-clock" id="clock-p1">10:00</div>
+                                    </div>
+                                </div>
+                                <div class="captured-pieces"></div>
+                            </div>
+                        </div>
+
+                    </div>
+
+                    <!-- Slide-Over Move Notation Drawer / Desktop Sidebar -->
+                    <aside id="notation-drawer" class="notation-drawer hidden">
+                        <div class="notation-header">
+                            <h4>TOURNAMENT NOTATION</h4>
+                            <button id="btn-close-notation" class="mini-icon-btn" title="Close Notation">✕</button>
+                        </div>
+                        <div id="move-history-list" class="notation-body">
+                            <!-- Move items inserted dynamically -->
+                        </div>
+                    </aside>
+
+                </div>
+
+                <!-- Compact In-Game Controls Bar -->
+                <footer id="game-controls" class="arena-controls-bar">
                     <button id="btn-rotate" class="ctrl-btn" title="Rotate Board 90°">🔄 Rotate</button>
                     <button id="btn-undo" class="ctrl-btn" title="Undo Move (Local/AI Mode)">↩ Undo</button>
                     <button id="btn-restart" class="ctrl-btn" title="Restart Game">🔄 Restart</button>
                     <button id="btn-resign" class="ctrl-btn resign-btn" title="Resign Match">🏳 Resign</button>
                 </footer>
+
             </section>
 
             <!-- VIEW 3: TACTICAL PUZZLES SCREEN -->

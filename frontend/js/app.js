@@ -48,16 +48,21 @@ class QuadChessApp {
             btn.classList.toggle("active", btn.dataset.target === viewId);
         });
 
-        // Header adaptations
+        // Header adaptations & App Root in-game view toggle
+        const appRoot = document.getElementById("app-root");
         const backBtn = document.getElementById("btn-back-home");
         const turnBadge = document.getElementById("turn-badge");
         const roomCodeTag = document.getElementById("room-code-tag");
 
         if (viewId === "view-game") {
+            appRoot?.classList.add("in-game-view");
             backBtn?.classList.remove("hidden");
             turnBadge?.classList.remove("hidden");
             if (this.isOnlineMode) roomCodeTag?.classList.remove("hidden");
+            // Dynamically resize chessboard to maximum available arena dimensions
+            setTimeout(() => this.ui?.resizeBoard?.(), 40);
         } else {
+            appRoot?.classList.remove("in-game-view");
             backBtn?.classList.add("hidden");
             turnBadge?.classList.add("hidden");
             roomCodeTag?.classList.add("hidden");
@@ -135,13 +140,33 @@ class QuadChessApp {
             this.startAIGame(this.aiDifficulty);
         });
 
-        // Notation Drawer Toggle
+        // In-Game Reactions Popover Bar
+        document.getElementById("btn-toggle-reactions")?.addEventListener("click", () => {
+            const bar = document.getElementById("arena-reactions-bar");
+            bar?.classList.toggle("hidden");
+        });
+
+        document.querySelectorAll(".arena-reactions-bar .emote-btn").forEach(btn => {
+            btn.addEventListener("click", (e) => {
+                const text = e.currentTarget.dataset.text || e.currentTarget.textContent;
+                this.showToast(`Sent: ${text}`);
+                window.soundSystem?.playClick();
+                if (this.isOnlineMode && this.wsClient) {
+                    this.wsClient.sendChat(text);
+                }
+                document.getElementById("arena-reactions-bar")?.classList.add("hidden");
+            });
+        });
+
+        // Notation Drawer / Sidebar Toggle
         document.getElementById("btn-toggle-notation")?.addEventListener("click", () => {
             const drawer = document.getElementById("notation-drawer");
             drawer?.classList.toggle("hidden");
+            setTimeout(() => this.ui?.resizeBoard?.(), 50);
         });
         document.getElementById("btn-close-notation")?.addEventListener("click", () => {
             document.getElementById("notation-drawer")?.classList.add("hidden");
+            setTimeout(() => this.ui?.resizeBoard?.(), 50);
         });
 
         // Game Controls
