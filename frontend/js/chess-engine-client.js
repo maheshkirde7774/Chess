@@ -652,5 +652,139 @@ class ClientChessEngine {
     }
 }
 
+/**
+ * 4-Player Tactical Chess AI Engine
+ * Evaluates captures, central control, king checks, promotions, and survival.
+ */
+class FourPlayerAI {
+    constructor(difficulty = 'club') {
+        this.difficulty = difficulty; // 'novice', 'club', 'master'
+        this.pieceValues = { 'P': 100, 'N': 320, 'B': 330, 'R': 500, 'Q': 950, 'K': 20000 };
+    }
+
+    setDifficulty(diff) {
+        this.difficulty = diff;
+    }
+
+    chooseMove(engine, player, is2v2 = false) {
+        const legalMoves = engine.getLegalMoves(player);
+        if (!legalMoves.length) return null;
+
+        // In 2v2 mode: Player 1 (Cyan) & 3 (Lime) are allies; Player 2 (Magenta) & 4 (Gold) are allies
+        const ally = is2v2 ? (player === 1 ? 3 : (player === 3 ? 1 : (player === 2 ? 4 : 2))) : null;
+
+        if (this.difficulty === 'novice') {
+            const captures = legalMoves.filter(m => {
+                const target = engine.getPiece(m.to[0], m.to[1]);
+                return target && target.player !== player && (!is2v2 || target.player !== ally);
+            });
+            if (captures.length && Math.random() < 0.65) {
+                return captures[Math.floor(Math.random() * captures.length)];
+            }
+            return legalMoves[Math.floor(Math.random() * legalMoves.length)];
+        }
+
+        let bestScore = -Infinity;
+        let bestMoves = [];
+
+        for (const move of legalMoves) {
+            let score = 0;
+            const target = engine.getPiece(move.to[0], move.to[1]);
+            const piece = engine.getPiece(move.from[0], move.from[1]);
+
+            // Disallow or heavily penalize capturing allies in 2v2
+            if (is2v2 && target && target.player === ally) {
+                continue;
+            }
+
+            // 1. Material value
+            if (target) {
+                const victimVal = this.pieceValues[target.type] || 0;
+                const attackerVal = this.pieceValues[piece.type] || 0;
+                score += (victimVal * 10) - (attackerVal * 0.8);
+                if (target.type === 'Q') score += 600;
+                if (target.type === 'K') score += 2500;
+            }
+
+            // 2. Promotion bonus
+            if (move.promotion) {
+                score += 850;
+            }
+
+            // 3. Central control (center squares 5..8 on 14x14)
+            const dist = Math.abs(move.to[0] - 6.5) + Math.abs(move.to[1] - 6.5);
+            score += (13 - dist) * 4;
+
+            // 4. Pawn push forward
+            if (piece.type === 'P') {
+                score += 20;
+            }
+
+            // 5. Tactical safety in 'master' mode
+            if (this.difficulty === 'master') {
+                for (const opp of engine.activePlayers) {
+                    if (opp !== player && (!is2v2 || opp !== ally)) {
+                        if (engine.isSquareAttacked(move.to[0], move.to[1], opp)) {
+                            score -= (this.pieceValues[piece.type] || 100) * 0.75;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // Micro random factor to avoid identical games
+            score += Math.random() * 8;
+
+            if (score > bestScore) {
+                bestScore = score;
+                bestMoves = [move];
+            } else if (Math.abs(score - bestScore) < 0.5) {
+                bestMoves.push(move);
+            }
+        }
+
+        return bestMoves.length ? bestMoves[Math.floor(Math.random() * bestMoves.length)] : legalMoves[0];
+    }
+}
+
+/**
+ * 4-Player Tactical Chess Puzzles Dataset
+ */
+const PUZZLES_DATA = [
+    {
+        id: "pz-1",
+        title: "The Quadrant Fork",
+        difficulty: "Intermediate",
+        rating: 1450,
+        player: 1, // Cyan to move
+        description: "Cyan to move. Find the fork that attacks both Magenta and Gold high-value pieces simultaneously.",
+        solution: { from: [13, 4], to: [11, 5] },
+        hint: "Leap forward with your Knight to threaten two fronts."
+    },
+    {
+        id: "pz-2",
+        title: "Perimeter Queen Sacrifice",
+        difficulty: "Advanced",
+        rating: 1680,
+        player: 1,
+        description: "Cyan to move. Breach Lime's defense through a tactical Queen diversion.",
+        solution: { from: [13, 6], to: [8, 6] },
+        hint: "Drive your Queen deep into the central channel."
+    },
+    {
+        id: "pz-3",
+        title: "Coronation on Rank 8",
+        difficulty: "Grandmaster",
+        rating: 1890,
+        player: 1,
+        description: "Cyan to move. Advance your passed pawn to achieve an unblockable promotion.",
+        solution: { from: [12, 6], to: [10, 6] },
+        hint: "Push your d-pawn through the vacant center."
+    }
+];
+
 window.ClientChessEngine = ClientChessEngine;
 window.PLAYER_INFO = PLAYER_INFO;
+window.FourPlayerAI = FourPlayerAI;
+window.PUZZLES_DATA = PUZZLES_DATA;
+

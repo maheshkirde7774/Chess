@@ -1,93 +1,174 @@
 /**
- * Neon Four Chess - UI Renderer & Interaction Controller
- * Handles 14x14 cross board rendering, neon piece SVGs, highlights, animations, and HUD modals.
+ * Quad Chess / Four Player Grandmaster - UI Renderer & Interaction Controller
+ * Renders realistic Staunton pieces, tournament cross board, coordinates,
+ * smooth translation animations, digital chess clocks, and move history notation.
  */
 
-// Futuristic SVG Piece Templates (viewBox 0 0 100 100)
+// Classic Staunton-Inspired Vector Pieces with 3D Depth & Player Accent Gemstones
 const PIECE_SVGS = {
     'K': `
-        <svg viewBox="0 0 100 100" class="piece-svg">
-            <!-- Cross -->
-            <path d="M50 12 L50 26 M43 19 L57 19" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>
-            <!-- Crown Base & Arches -->
-            <path d="M26 40 C34 32, 44 26, 50 26 C56 26, 66 32, 74 40 C68 56, 76 66, 75 74 L25 74 C24 66, 32 56, 26 40 Z" 
-                  fill="currentColor" fill-opacity="0.18" stroke="currentColor" stroke-width="4.5" stroke-linejoin="round"/>
-            <!-- Decorative Jewels -->
-            <circle cx="34" cy="46" r="3" fill="currentColor"/>
-            <circle cx="50" cy="42" r="3.5" fill="currentColor"/>
-            <circle cx="66" cy="46" r="3" fill="currentColor"/>
-            <!-- Base Ring -->
-            <rect x="22" y="74" width="56" height="8" rx="3" fill="currentColor" fill-opacity="0.3" stroke="currentColor" stroke-width="4"/>
-            <path d="M18 84 L82 84" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>
+        <svg viewBox="0 0 100 100" class="piece-svg piece-king" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+                <linearGradient id="kingGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stop-color="#ffffff" stop-opacity="0.95"/>
+                    <stop offset="50%" stop-color="#cbd5e1" stop-opacity="0.9"/>
+                    <stop offset="100%" stop-color="#94a3b8" stop-opacity="0.85"/>
+                </linearGradient>
+                <filter id="pieceShadow" x="-15%" y="-15%" width="130%" height="130%">
+                    <feDropShadow dx="0" dy="2" stdDeviation="2.5" flood-color="#000000" flood-opacity="0.55"/>
+                </filter>
+            </defs>
+            <g filter="url(#pieceShadow)">
+                <!-- Cross Finial -->
+                <path d="M50 11 L50 24 M43.5 17.5 L56.5 17.5" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
+                <!-- Central Crown Peak -->
+                <circle cx="50" cy="25" r="3.5" fill="currentColor"/>
+                <!-- Imperial Diadem & Arches -->
+                <path d="M26 38 C32 30, 42 27, 50 27 C58 27, 68 30, 74 38 C72 52, 75 64, 73 72 L27 72 C25 64, 28 52, 26 38 Z" 
+                      fill="url(#kingGrad)" stroke="#1e293b" stroke-width="2.5" stroke-linejoin="round"/>
+                <!-- Player Signature Accent Gem -->
+                <polygon points="50,33 55,42 50,51 45,42" fill="currentColor" stroke="#0f172a" stroke-width="1.2"/>
+                <circle cx="50" cy="42" r="2.2" fill="#ffffff" fill-opacity="0.9"/>
+                <!-- Diadem Side Filigree -->
+                <path d="M34 44 C38 41, 44 41, 46 45" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/>
+                <path d="M66 44 C62 41, 56 41, 54 45" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/>
+                <!-- Collar Ring -->
+                <rect x="24" y="72" width="52" height="7" rx="3" fill="#334155" stroke="#1e293b" stroke-width="2"/>
+                <rect x="28" y="73.5" width="44" height="4" rx="2" fill="currentColor" fill-opacity="0.45"/>
+                <!-- Weighted Base Plinth -->
+                <path d="M20 79 L80 79 C82 85, 78 88, 76 90 L24 90 C22 88, 18 85, 20 79 Z" fill="#1e293b" stroke="#0f172a" stroke-width="2"/>
+            </g>
         </svg>
     `,
     'Q': `
-        <svg viewBox="0 0 100 100" class="piece-svg">
-            <!-- Queen Crown Points with Spheres -->
-            <circle cx="20" cy="28" r="4" fill="currentColor"/>
-            <circle cx="35" cy="22" r="4" fill="currentColor"/>
-            <circle cx="50" cy="18" r="4.5" fill="currentColor"/>
-            <circle cx="65" cy="22" r="4" fill="currentColor"/>
-            <circle cx="80" cy="28" r="4" fill="currentColor"/>
-            <!-- Coronet Body -->
-            <path d="M20 32 L28 66 L72 66 L80 32 L65 48 L50 24 L35 48 Z" 
-                  fill="currentColor" fill-opacity="0.2" stroke="currentColor" stroke-width="4.5" stroke-linejoin="round"/>
-            <!-- Base Ring -->
-            <rect x="24" y="68" width="52" height="8" rx="3" fill="currentColor" fill-opacity="0.3" stroke="currentColor" stroke-width="4"/>
-            <path d="M18 78 L82 78" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>
+        <svg viewBox="0 0 100 100" class="piece-svg piece-queen" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+                <linearGradient id="queenGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stop-color="#ffffff" stop-opacity="0.95"/>
+                    <stop offset="50%" stop-color="#cbd5e1" stop-opacity="0.9"/>
+                    <stop offset="100%" stop-color="#94a3b8" stop-opacity="0.85"/>
+                </linearGradient>
+            </defs>
+            <g filter="url(#pieceShadow)">
+                <!-- Five Coronet Pearls -->
+                <circle cx="20" cy="25" r="3.2" fill="currentColor"/>
+                <circle cx="35" cy="20" r="3.5" fill="currentColor"/>
+                <circle cx="50" cy="17" r="4" fill="currentColor"/>
+                <circle cx="65" cy="20" r="3.5" fill="currentColor"/>
+                <circle cx="80" cy="25" r="3.2" fill="currentColor"/>
+                <!-- Coronet Body -->
+                <path d="M20 28 L27 64 L73 64 L80 28 L65 44 L50 22 L35 44 Z" 
+                      fill="url(#queenGrad)" stroke="#1e293b" stroke-width="2.5" stroke-linejoin="round"/>
+                <!-- Royal Waist Jewel -->
+                <ellipse cx="50" cy="52" rx="5" ry="6" fill="currentColor" stroke="#0f172a" stroke-width="1.2"/>
+                <circle cx="50" cy="51" r="2" fill="#ffffff" fill-opacity="0.9"/>
+                <!-- Mid Waist Ring -->
+                <rect x="25" y="65" width="50" height="7" rx="3" fill="#334155" stroke="#1e293b" stroke-width="2"/>
+                <!-- Weighted Base Plinth -->
+                <path d="M21 72 L79 72 C81 80, 78 86, 75 88 L25 88 C22 86, 19 80, 21 72 Z" fill="#1e293b" stroke="#0f172a" stroke-width="2"/>
+            </g>
         </svg>
     `,
     'R': `
-        <svg viewBox="0 0 100 100" class="piece-svg">
-            <!-- Battlement Crenellations -->
-            <path d="M24 24 L34 24 L34 32 L44 32 L44 24 L56 24 L56 32 L66 32 L66 24 L76 24 L74 42 L26 42 Z" 
-                  fill="currentColor" fill-opacity="0.22" stroke="currentColor" stroke-width="4.5" stroke-linejoin="round"/>
-            <!-- Tower Body -->
-            <path d="M30 42 L34 72 L66 72 L70 42 Z" 
-                  fill="currentColor" fill-opacity="0.15" stroke="currentColor" stroke-width="4.5"/>
-            <!-- Slit window -->
-            <line x1="50" y1="48" x2="50" y2="60" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
-            <!-- Base Plinth -->
-            <rect x="22" y="74" width="56" height="8" rx="3" fill="currentColor" fill-opacity="0.3" stroke="currentColor" stroke-width="4"/>
-            <path d="M18 84 L82 84" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>
+        <svg viewBox="0 0 100 100" class="piece-svg piece-rook" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+                <linearGradient id="rookGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stop-color="#ffffff" stop-opacity="0.95"/>
+                    <stop offset="50%" stop-color="#cbd5e1" stop-opacity="0.9"/>
+                    <stop offset="100%" stop-color="#94a3b8" stop-opacity="0.85"/>
+                </linearGradient>
+            </defs>
+            <g filter="url(#pieceShadow)">
+                <!-- Crenellations (Castle Battlements) -->
+                <path d="M25 22 L33 22 L33 30 L43 30 L43 22 L57 22 L57 30 L67 30 L67 22 L75 22 L73 38 L27 38 Z" 
+                      fill="url(#rookGrad)" stroke="#1e293b" stroke-width="2.5" stroke-linejoin="round"/>
+                <!-- Arrow Slit Insignia -->
+                <rect x="47.5" y="44" width="5" height="15" rx="2" fill="currentColor" stroke="#0f172a" stroke-width="1"/>
+                <!-- Tower Body -->
+                <path d="M30 38 L34 71 L66 71 L70 38 Z" 
+                      fill="url(#rookGrad)" stroke="#1e293b" stroke-width="2.5"/>
+                <!-- Player Accent Collar -->
+                <rect x="26" y="71" width="48" height="6" rx="2.5" fill="currentColor" stroke="#1e293b" stroke-width="1.8"/>
+                <!-- Heavy Base -->
+                <path d="M21 77 L79 77 C81 83, 78 88, 76 90 L24 90 C22 88, 19 83, 21 77 Z" fill="#1e293b" stroke="#0f172a" stroke-width="2"/>
+            </g>
         </svg>
     `,
     'B': `
-        <svg viewBox="0 0 100 100" class="piece-svg">
-            <!-- Top Finial -->
-            <circle cx="50" cy="18" r="3.5" fill="currentColor"/>
-            <!-- Mitre Hood -->
-            <path d="M50 23 C36 23, 26 38, 28 54 C30 66, 42 70, 50 72 C58 70, 70 66, 72 54 C74 38, 64 23, 50 23 Z" 
-                  fill="currentColor" fill-opacity="0.2" stroke="currentColor" stroke-width="4.5" stroke-linejoin="round"/>
-            <!-- Mitre Cut Slash -->
-            <path d="M44 34 L56 46" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
-            <!-- Base Ring -->
-            <rect x="26" y="74" width="48" height="7" rx="3" fill="currentColor" fill-opacity="0.3" stroke="currentColor" stroke-width="4"/>
-            <path d="M22 83 L78 83" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>
+        <svg viewBox="0 0 100 100" class="piece-svg piece-bishop" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+                <linearGradient id="bishopGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stop-color="#ffffff" stop-opacity="0.95"/>
+                    <stop offset="50%" stop-color="#cbd5e1" stop-opacity="0.9"/>
+                    <stop offset="100%" stop-color="#94a3b8" stop-opacity="0.85"/>
+                </linearGradient>
+            </defs>
+            <g filter="url(#pieceShadow)">
+                <!-- Spherical Finial -->
+                <circle cx="50" cy="16" r="3.8" fill="currentColor"/>
+                <!-- Mitre Body with Elegant Slash -->
+                <path d="M50 20 C36 20, 26 34, 28 52 C30 63, 40 68, 50 69 C60 68, 70 63, 72 52 C74 34, 64 20, 50 20 Z" 
+                      fill="url(#bishopGrad)" stroke="#1e293b" stroke-width="2.5" stroke-linejoin="round"/>
+                <!-- Papal Slash -->
+                <path d="M44 32 L58 46" stroke="#0f172a" stroke-width="3" stroke-linecap="round"/>
+                <!-- Center Accent Cross/Dot -->
+                <circle cx="50" cy="56" r="3.2" fill="currentColor" stroke="#0f172a" stroke-width="1"/>
+                <!-- Waist Ring -->
+                <rect x="27" y="70" width="46" height="6" rx="2.5" fill="#334155" stroke="#1e293b" stroke-width="1.8"/>
+                <!-- Plinth -->
+                <path d="M22 76 L78 76 C80 82, 77 87, 75 89 L25 89 C23 87, 20 82, 22 76 Z" fill="#1e293b" stroke="#0f172a" stroke-width="2"/>
+            </g>
         </svg>
     `,
     'N': `
-        <svg viewBox="0 0 100 100" class="piece-svg">
-            <!-- Cybernetic Knight Silhouette -->
-            <path d="M32 80 L70 80 C68 70, 72 52, 60 40 C56 32, 58 20, 50 18 C46 22, 42 24, 38 24 C34 26, 26 32, 24 44 C24 50, 30 52, 34 50 C38 48, 42 56, 32 64 Z" 
-                  fill="currentColor" fill-opacity="0.22" stroke="currentColor" stroke-width="4.5" stroke-linejoin="round"/>
-            <!-- Cyber Eye Glow -->
-            <circle cx="38" cy="34" r="3" fill="currentColor"/>
-            <!-- Mane Accent -->
-            <path d="M52 28 L64 36 M54 42 L66 50" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
-            <path d="M22 82 L78 82" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>
+        <svg viewBox="0 0 100 100" class="piece-svg piece-knight" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+                <linearGradient id="knightGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stop-color="#ffffff" stop-opacity="0.95"/>
+                    <stop offset="50%" stop-color="#cbd5e1" stop-opacity="0.9"/>
+                    <stop offset="100%" stop-color="#94a3b8" stop-opacity="0.85"/>
+                </linearGradient>
+            </defs>
+            <g filter="url(#pieceShadow)">
+                <!-- Sculpted Steed Silhouette -->
+                <path d="M30 75 L71 75 C68 64, 74 46, 61 36 C57 30, 58 19, 51 16 C46 19, 43 21, 39 21 C35 23, 27 29, 25 41 C25 47, 30 49, 34 47 C39 45, 43 53, 31 60 Z" 
+                      fill="url(#knightGrad)" stroke="#1e293b" stroke-width="2.5" stroke-linejoin="round"/>
+                <!-- Alert Eye -->
+                <ellipse cx="37" cy="31" rx="2.5" ry="3" fill="currentColor" stroke="#0f172a" stroke-width="1"/>
+                <circle cx="37.5" cy="30.5" r="1" fill="#ffffff"/>
+                <!-- Mane Ridges with Accent -->
+                <path d="M51 24 C57 27, 61 32, 63 38" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+                <path d="M56 38 C61 41, 65 47, 67 54" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+                <!-- Base Band -->
+                <rect x="25" y="75" width="50" height="6" rx="2.5" fill="currentColor" stroke="#1e293b" stroke-width="1.8"/>
+                <path d="M21 81 L79 81 C81 86, 78 90, 75 91 L25 91 C22 90, 19 86, 21 81 Z" fill="#1e293b" stroke="#0f172a" stroke-width="2"/>
+            </g>
         </svg>
     `,
     'P': `
-        <svg viewBox="0 0 100 100" class="piece-svg">
-            <!-- Pawn Head -->
-            <circle cx="50" cy="28" r="14" fill="currentColor" fill-opacity="0.22" stroke="currentColor" stroke-width="4.5"/>
-            <!-- Pawn Body -->
-            <path d="M40 44 C34 56, 30 68, 28 74 L72 74 C70 68, 66 56, 60 44 Z" 
-                  fill="currentColor" fill-opacity="0.18" stroke="currentColor" stroke-width="4.5" stroke-linejoin="round"/>
-            <!-- Base Plinth -->
-            <rect x="24" y="76" width="52" height="7" rx="3" fill="currentColor" fill-opacity="0.3" stroke="currentColor" stroke-width="4"/>
-            <path d="M20 85 L80 85" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>
+        <svg viewBox="0 0 100 100" class="piece-svg piece-pawn" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+                <linearGradient id="pawnGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stop-color="#ffffff" stop-opacity="0.95"/>
+                    <stop offset="50%" stop-color="#cbd5e1" stop-opacity="0.9"/>
+                    <stop offset="100%" stop-color="#94a3b8" stop-opacity="0.85"/>
+                </linearGradient>
+            </defs>
+            <g filter="url(#pieceShadow)">
+                <!-- Pawn Spherical Head -->
+                <circle cx="50" cy="27" r="13" fill="url(#pawnGrad)" stroke="#1e293b" stroke-width="2.5"/>
+                <!-- Accent Dot on Head Crown -->
+                <circle cx="50" cy="24" r="3" fill="currentColor" stroke="#0f172a" stroke-width="1"/>
+                <!-- Collar Ring -->
+                <rect x="36" y="41" width="28" height="5" rx="2.5" fill="#334155" stroke="#1e293b" stroke-width="1.8"/>
+                <!-- Tapered Conical Body -->
+                <path d="M41 46 C37 57, 33 66, 30 73 L70 73 C67 66, 63 57, 59 46 Z" 
+                      fill="url(#pawnGrad)" stroke="#1e293b" stroke-width="2.5" stroke-linejoin="round"/>
+                <!-- Base Ring with Accent -->
+                <rect x="27" y="73" width="46" height="6" rx="2.5" fill="currentColor" stroke="#1e293b" stroke-width="1.8"/>
+                <!-- Weighted Plinth -->
+                <path d="M22 79 L78 79 C80 84, 77 88, 75 90 L25 90 C23 88, 20 84, 22 79 Z" fill="#1e293b" stroke="#0f172a" stroke-width="2"/>
+            </g>
         </svg>
     `
 };
@@ -99,17 +180,26 @@ class ChessUI {
         this.selectedSquare = null;
         this.currentLegalMoves = [];
         this.boardRotation = 0; // 0, 90, 180, 270 deg
-        this.pendingPromotion = null; // {from: [r,c], to: [r,c]}
+        this.pendingPromotion = null;
+        this.isAnimating = false;
+
+        // Clocks in seconds (default 10 minutes per player = 600s)
+        this.clocks = { 1: 600, 2: 600, 3: 600, 4: 600 };
+        this.clockInterval = null;
 
         this.boardContainer = document.getElementById("chessboard");
-        this.turnBanner = document.getElementById("turn-banner");
         this.turnBadge = document.getElementById("turn-badge");
 
         this.initBoardDOM();
+        this.startChessClocks();
     }
 
     initBoardDOM() {
+        if (!this.boardContainer) return;
         this.boardContainer.innerHTML = "";
+
+        const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n'];
+
         for (let r = 0; r < BOARD_SIZE; r++) {
             for (let c = 0; c < BOARD_SIZE; c++) {
                 const sq = document.createElement("div");
@@ -122,6 +212,21 @@ class ChessUI {
                 } else {
                     const isDark = (r + c) % 2 === 1;
                     sq.className = `square active-square ${isDark ? 'dark-sq' : 'light-sq'}`;
+                    
+                    // Coordinates notation on edges
+                    if (c === 0 || (c === 3 && (r < 3 || r > 10))) {
+                        const rankLabel = document.createElement("span");
+                        rankLabel.className = "coord-label coord-rank";
+                        rankLabel.textContent = 14 - r;
+                        sq.appendChild(rankLabel);
+                    }
+                    if (r === 13 || (r === 10 && (c < 3 || c > 10))) {
+                        const fileLabel = document.createElement("span");
+                        fileLabel.className = "coord-label coord-file";
+                        fileLabel.textContent = files[c];
+                        sq.appendChild(fileLabel);
+                    }
+
                     sq.addEventListener("click", () => this.handleSquareClick(r, c));
                 }
                 this.boardContainer.appendChild(sq);
@@ -134,24 +239,28 @@ class ChessUI {
             this.engine.syncFromServerState(gameState);
         }
 
-        // Render each square
+        // Render each active square
         for (let r = 0; r < BOARD_SIZE; r++) {
             for (let c = 0; c < BOARD_SIZE; c++) {
                 const sqEl = document.getElementById(`sq-${r}-${c}`);
                 if (!sqEl || !isValidSquare(r, c)) continue;
 
-                // Clear previous classes except base
+                // Retain coordinate labels
+                const labels = sqEl.querySelectorAll(".coord-label");
                 const isDark = (r + c) % 2 === 1;
                 sqEl.className = `square active-square ${isDark ? 'dark-sq' : 'light-sq'}`;
                 sqEl.innerHTML = "";
+                labels.forEach(l => sqEl.appendChild(l));
 
                 const piece = this.engine.getPiece(r, c);
                 if (piece) {
                     const pEl = document.createElement("div");
                     const pColor = piece.isDormant ? "dormant" : `player-${piece.player}`;
                     pEl.className = `chess-piece ${pColor}`;
+                    pEl.dataset.player = piece.player;
+                    pEl.dataset.type = piece.type;
                     pEl.innerHTML = PIECE_SVGS[piece.type] || "";
-                    pEl.title = `${window.PLAYER_INFO[piece.player].name} ${piece.type}${piece.isDormant ? ' (Neutral)' : ''}`;
+                    pEl.title = `${window.PLAYER_INFO[piece.player]?.name || 'Player'} ${piece.type}${piece.isDormant ? ' (Neutral)' : ''}`;
                     sqEl.appendChild(pEl);
                 }
 
@@ -193,7 +302,7 @@ class ChessUI {
             }
         }
 
-        // Update Turn Banner & Badges
+        // Update HUD & Clocks
         this.updateHUD();
 
         // Handle auto-rotation if enabled
@@ -202,8 +311,42 @@ class ChessUI {
         }
     }
 
+    /**
+     * Animate smooth piece glide before updating DOM
+     */
+    animateAndExecuteMove(move, isCapture) {
+        const [fromR, fromC] = move.from;
+        const [toR, toC] = move.to;
+
+        const fromSq = document.getElementById(`sq-${fromR}-${fromC}`);
+        const toSq = document.getElementById(`sq-${toR}-${toC}`);
+        const pieceEl = fromSq ? fromSq.querySelector(".chess-piece") : null;
+
+        if (!fromSq || !toSq || !pieceEl || this.isAnimating) {
+            this.executeMove(move);
+            return;
+        }
+
+        this.isAnimating = true;
+
+        const fromRect = fromSq.getBoundingClientRect();
+        const toRect = toSq.getBoundingClientRect();
+        const dx = toRect.left - fromRect.left;
+        const dy = toRect.top - fromRect.top;
+
+        // Apply smooth transition
+        pieceEl.style.transition = "transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1)";
+        pieceEl.style.transform = `translate(${dx}px, ${dy}px)`;
+        pieceEl.style.zIndex = "40";
+
+        setTimeout(() => {
+            this.isAnimating = false;
+            this.executeMove(move);
+        }, 220);
+    }
+
     handleSquareClick(r, c) {
-        if (this.engine.isGameOver) return;
+        if (this.engine.isGameOver || this.isAnimating) return;
 
         const piece = this.engine.getPiece(r, c);
 
@@ -230,9 +373,11 @@ class ChessUI {
                     this.showPromotionModal();
                     return;
                 } else {
-                    this.executeMove({ from: [selR, selC], to: [r, c] });
+                    const chosenMove = { from: [selR, selC], to: [r, c] };
+                    const isCapture = this.engine.getPiece(r, c) !== null;
                     this.selectedSquare = null;
                     this.currentLegalMoves = [];
+                    this.animateAndExecuteMove(chosenMove, isCapture);
                     return;
                 }
             }
@@ -242,7 +387,10 @@ class ChessUI {
         if (piece && piece.player === this.engine.currentTurn && !piece.isDormant) {
             // Check if online mode prevents moving this color
             if (window.app && window.app.isOnlineMode && window.app.myRole !== piece.player) {
-                // Not authorized to move another player's army
+                return;
+            }
+            // Check if Play vs AI mode prevents moving AI bots
+            if (window.app && window.app.gameMode === "ai" && piece.player !== 1) {
                 return;
             }
 
@@ -262,7 +410,6 @@ class ChessUI {
         const targetPiece = this.engine.getPiece(move.to[0], move.to[1]);
         const isCapture = targetPiece !== null;
 
-        // Pass to callback (online sends to WS/API, local runs immediately)
         if (this.onMoveCallback) {
             this.onMoveCallback(move, isCapture);
         }
@@ -271,8 +418,9 @@ class ChessUI {
     showPromotionModal() {
         const modal = document.getElementById("promotion-modal");
         const optionsContainer = document.getElementById("promotion-options");
-        optionsContainer.innerHTML = "";
+        if (!modal || !optionsContainer) return;
 
+        optionsContainer.innerHTML = "";
         const player = this.engine.currentTurn;
         const colorClass = `player-${player}`;
         const pieces = ['Q', 'R', 'B', 'N'];
@@ -293,10 +441,11 @@ class ChessUI {
                         to: this.pendingPromotion.to,
                         promotion: p
                     };
+                    const isCapture = this.engine.getPiece(finalMove.to[0], finalMove.to[1]) !== null;
                     this.pendingPromotion = null;
                     this.selectedSquare = null;
                     this.currentLegalMoves = [];
-                    this.executeMove(finalMove);
+                    this.animateAndExecuteMove(finalMove, isCapture);
                 }
             });
             optionsContainer.appendChild(btn);
@@ -305,19 +454,57 @@ class ChessUI {
         modal.classList.remove("hidden");
     }
 
+    startChessClocks() {
+        if (this.clockInterval) clearInterval(this.clockInterval);
+        this.clockInterval = setInterval(() => {
+            if (this.engine.isGameOver) return;
+            const cur = this.engine.currentTurn;
+            if (this.clocks[cur] > 0) {
+                this.clocks[cur]--;
+                if (this.clocks[cur] === 10) {
+                    window.soundSystem.playClockTick();
+                }
+                this.updateClockDisplays();
+            } else if (this.clocks[cur] === 0) {
+                // Time flag: eliminate on time
+                this.engine.eliminatePlayer(cur);
+                this.render();
+            }
+        }, 1000);
+    }
+
+    formatTime(sec) {
+        const m = Math.floor(sec / 60);
+        const s = sec % 60;
+        return `${m}:${s < 10 ? '0' : ''}${s}`;
+    }
+
+    updateClockDisplays() {
+        for (let p = 1; p <= 4; p++) {
+            const clockEl = document.getElementById(`clock-p${p}`);
+            if (clockEl) {
+                clockEl.textContent = this.formatTime(this.clocks[p]);
+                if (this.clocks[p] < 30) {
+                    clockEl.classList.add("clock-low");
+                } else {
+                    clockEl.classList.remove("clock-low");
+                }
+            }
+        }
+    }
+
     updateHUD() {
         const turn = this.engine.currentTurn;
-        const info = window.PLAYER_INFO[turn];
+        const info = window.PLAYER_INFO[turn] || { name: `Player ${turn}`, color: '#fff' };
 
         // Turn indicator badge
         if (this.turnBadge) {
-            this.turnBadge.textContent = `${info.name}'s Turn`;
+            this.turnBadge.textContent = `${info.name}'s Move`;
             this.turnBadge.style.borderColor = info.color;
             this.turnBadge.style.color = info.color;
-            this.turnBadge.style.boxShadow = `0 0 12px ${info.color}`;
         }
 
-        // Active Player Cards
+        // Active Player Cards & Panels
         for (let p = 1; p <= 4; p++) {
             const card = document.getElementById(`player-card-${p}`);
             if (!card) continue;
@@ -328,24 +515,24 @@ class ChessUI {
             card.classList.toggle("active-turn-card", isCurrent);
             card.classList.toggle("eliminated-card", isEliminated);
 
-            // Update captured pieces
+            // Captured pieces rack
             const capturedList = card.querySelector(".captured-pieces");
             if (capturedList) {
                 const caps = this.engine.capturedPieces[p] || [];
                 capturedList.innerHTML = caps.map(type => `<span class="cap-piece-icon">${type}</span>`).join("");
             }
 
-            // In check badge
+            // Status badges
             const checkBadge = card.querySelector(".status-badge");
             if (checkBadge) {
                 if (isEliminated) {
-                    checkBadge.textContent = "ELIMINATED";
+                    checkBadge.textContent = "DEFEATED";
                     checkBadge.className = "status-badge eliminated";
                 } else if (this.engine.isInCheck(p)) {
                     checkBadge.textContent = "CHECK!";
                     checkBadge.className = "status-badge in-check";
                 } else if (isCurrent) {
-                    checkBadge.textContent = "THINKING";
+                    checkBadge.textContent = "ACTIVE";
                     checkBadge.className = "status-badge thinking";
                 } else {
                     checkBadge.textContent = "WAITING";
@@ -354,10 +541,44 @@ class ChessUI {
             }
         }
 
-        // Game Over Modal trigger
+        this.updateClockDisplays();
+        this.updateMoveHistoryNotation();
+
+        // Game Over trigger
         if (this.engine.isGameOver) {
             this.showGameOverModal();
         }
+    }
+
+    updateMoveHistoryNotation() {
+        const container = document.getElementById("move-history-list");
+        if (!container) return;
+
+        container.innerHTML = "";
+        const history = this.engine.moveHistory || [];
+        
+        // Group into tournament rounds
+        const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n'];
+
+        history.forEach((m, idx) => {
+            const item = document.createElement("div");
+            item.className = "history-item";
+            const [fr, fc] = m.from;
+            const [tr, tc] = m.to;
+            const pInfo = window.PLAYER_INFO[m.player] || { color: '#fff' };
+            const promo = m.promotion ? `=${m.promotion}` : "";
+            const isCap = m.captured ? "×" : "-";
+            const notation = `${m.piece.type} ${files[fc]}${14-fr}${isCap}${files[tc]}${14-tr}${promo}`;
+
+            item.innerHTML = `
+                <span class="hist-num">${idx + 1}.</span>
+                <span class="hist-dot" style="background:${pInfo.color}"></span>
+                <span class="hist-move">${notation}</span>
+            `;
+            container.appendChild(item);
+        });
+
+        container.scrollTop = container.scrollHeight;
     }
 
     showGameOverModal() {
@@ -372,33 +593,27 @@ class ChessUI {
             const wInfo = window.PLAYER_INFO[winner];
             title.textContent = `VICTORY!`;
             title.style.color = wInfo.color;
-            title.style.textShadow = `0 0 20px ${wInfo.color}`;
             details.innerHTML = `
                 <div class="winner-trophy">🏆</div>
-                <h3 style="color:${wInfo.color}; font-size:1.6rem; margin:10px 0;">${wInfo.name} Army Victorious!</h3>
-                <p>The last standing commander in the neon arena.</p>
+                <h3 style="color:${wInfo.color}; font-size:1.5rem; margin:10px 0;">${wInfo.name} Army Victorious</h3>
+                <p style="color:var(--color-text-secondary); margin-bottom:16px;">The last standing grandmaster in the quad arena.</p>
                 <div class="gameover-stats">
-                    <div><strong>${this.engine.turnNumber}</strong><span>Turns</span></div>
-                    <div><strong>${this.engine.moveHistory.length}</strong><span>Total Moves</span></div>
+                    <div class="stat-pill"><strong>${this.engine.turnNumber}</strong><span>Turns</span></div>
+                    <div class="stat-pill"><strong>${this.engine.moveHistory.length}</strong><span>Total Moves</span></div>
+                    <div class="stat-pill"><strong style="color:#10b981">+24</strong><span>Rating Delta</span></div>
                 </div>
             `;
             window.soundSystem.playVictory();
         } else {
-            title.textContent = "STALEMATE / DRAW";
-            details.innerHTML = "<p>The battle ended in a stalemate. No victor stands alone.</p>";
+            title.textContent = "DRAW / STALEMATE";
+            details.innerHTML = "<p>The tournament match concluded without a sole victor standing.</p>";
         }
 
         modal.classList.remove("hidden");
     }
 
     rotateToPlayer(player) {
-        // Cyan = 0deg, West/Magenta = 270deg, Lime = 180deg, Gold = 90deg
-        const rotationMap = {
-            1: 0,
-            2: 270,
-            3: 180,
-            4: 90
-        };
+        const rotationMap = { 1: 0, 2: 270, 3: 180, 4: 90 };
         const deg = rotationMap[player] || 0;
         this.boardContainer.style.transform = `rotate(${deg}deg)`;
     }

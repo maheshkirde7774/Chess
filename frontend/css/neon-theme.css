@@ -1,65 +1,138 @@
 /**
- * Neon Four Chess - Futuristic Theme & Color Tokens
+ * Quad Chess / Four Player Grandmaster - Design System & Theme Tokens
+ * Dark charcoal, graphite, alabaster & subtle player accents.
+ * Inspired by modern competitive tournament platforms.
  */
 
 :root {
-    /* Base Backgrounds */
-    --bg-main: #07080e;
-    --bg-surface: #0e111d;
-    --bg-surface-elevated: #151a2d;
-    --bg-glass: rgba(18, 22, 38, 0.75);
+    /* Base Charcoal & Graphite Surfaces */
+    --bg-app: #0d0e12;
+    --bg-surface: #14161c;
+    --bg-card: #1a1d24;
+    --bg-card-hover: #222630;
+    --bg-card-active: #282d3a;
+    --bg-elevated: #20242e;
+    --bg-glass: rgba(20, 22, 28, 0.85);
+    --bg-glass-subtle: rgba(26, 29, 36, 0.65);
+    --bg-overlay: rgba(8, 10, 14, 0.88);
 
-    /* Player Neon Colors */
-    --color-cyan: #00f3ff;
-    --color-cyan-glow: rgba(0, 243, 255, 0.45);
-    --color-magenta: #ff007f;
-    --color-magenta-glow: rgba(255, 0, 127, 0.45);
-    --color-lime: #39ff14;
-    --color-lime-glow: rgba(57, 255, 20, 0.45);
-    --color-gold: #ffd700;
-    --color-gold-glow: rgba(255, 215, 0, 0.45);
+    /* Borders & Dividers */
+    --border-subtle: rgba(255, 255, 255, 0.07);
+    --border-card: #282c37;
+    --border-card-hover: #3d4354;
+    --border-active: #4f576d;
+    --border-focus: #38bdf8;
 
-    /* Board Squares */
-    --board-border: #1e243d;
-    --board-light: #161c33;
-    --board-dark: #0d1222;
-    --board-void: #05060a;
+    /* Subtle Player Tournament Accents */
+    --color-p1: #0ea5e9;           /* Cyan / South: Electric Cerulean */
+    --color-p1-muted: rgba(14, 165, 233, 0.15);
+    --color-p1-border: rgba(14, 165, 233, 0.4);
+    
+    --color-p2: #ec4899;           /* Magenta / West: Rose Quartz */
+    --color-p2-muted: rgba(236, 72, 153, 0.15);
+    --color-p2-border: rgba(236, 72, 153, 0.4);
 
-    /* Status Colors */
-    --color-danger: #ff2a2a;
-    --color-danger-glow: rgba(255, 42, 42, 0.6);
-    --color-success: #00ffaa;
-    --color-text-primary: #f0f4fc;
-    --color-text-secondary: #8c97b8;
-    --color-text-muted: #545e7d;
+    --color-p3: #10b981;           /* Lime / North: Tournament Emerald */
+    --color-p3-muted: rgba(16, 185, 129, 0.15);
+    --color-p3-border: rgba(16, 185, 129, 0.4);
 
-    /* Typography */
-    --font-heading: 'Orbitron', -apple-system, sans-serif;
-    --font-body: 'Rajdhani', -apple-system, sans-serif;
+    --color-p4: #f59e0b;           /* Gold / East: Champagne Amber */
+    --color-p4-muted: rgba(245, 158, 11, 0.15);
+    --color-p4-border: rgba(245, 158, 11, 0.4);
+
+    /* Legacy compatibility aliases */
+    --color-cyan: var(--color-p1);
+    --color-cyan-glow: rgba(14, 165, 233, 0.25);
+    --color-magenta: var(--color-p2);
+    --color-magenta-glow: rgba(236, 72, 153, 0.25);
+    --color-lime: var(--color-p3);
+    --color-lime-glow: rgba(16, 185, 129, 0.25);
+    --color-gold: var(--color-p4);
+    --color-gold-glow: rgba(245, 158, 11, 0.25);
+
+    /* Board Squares (Tournament Slate & Alabaster) */
+    --board-rim: #1f222b;
+    --board-rim-border: #2a2e3b;
+    --board-dark: #373f4e;          /* Sleek slate dark square */
+    --board-light: #cdd4dc;         /* Clean alabaster light square */
+    --board-void: #0d0e12;          /* Corner cutouts match table */
+    --board-coord: #7a8499;
+
+    /* Highlights & Indicators */
+    --square-selected: rgba(56, 189, 248, 0.42);
+    --square-selected-border: #38bdf8;
+    --square-last-move: rgba(245, 158, 11, 0.28);
+    --square-check: rgba(239, 68, 68, 0.45);
+    --move-dot: rgba(30, 41, 59, 0.45);
+    --move-dot-light: rgba(15, 23, 42, 0.35);
+    --capture-ring: rgba(239, 68, 68, 0.55);
+
+    /* Status & Alerts */
+    --color-danger: #ef4444;
+    --color-danger-bg: rgba(239, 68, 68, 0.12);
+    --color-success: #10b981;
+    --color-success-bg: rgba(16, 185, 129, 0.12);
+    --color-warning: #f59e0b;
+    --color-warning-bg: rgba(245, 158, 11, 0.12);
+    --color-info: #0ea5e9;
+
+    /* Neutral Typography */
+    --color-text-primary: #f8fafc;
+    --color-text-secondary: #94a3b8;
+    --color-text-muted: #64748b;
+    --color-text-disabled: #475569;
+
+    /* Typography Families */
+    --font-heading: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --font-body: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+
+    /* Elevation & Shadows */
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 12px -2px rgba(0, 0, 0, 0.45), 0 2px 4px -2px rgba(0, 0, 0, 0.3);
+    --shadow-lg: 0 12px 28px -4px rgba(0, 0, 0, 0.6), 0 4px 8px -2px rgba(0, 0, 0, 0.4);
+    --shadow-xl: 0 20px 40px -8px rgba(0, 0, 0, 0.75);
+
+    /* Radii */
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 16px;
+    --radius-xl: 22px;
+    --radius-full: 9999px;
 
     /* Transitions */
-    --transition-fast: 0.15s ease;
-    --transition-smooth: 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    --transition-fast: 0.12s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-smooth: 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+    --transition-slow: 0.36s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* Player Themes */
+/* Player Theme Helpers */
 .player-1, .player-cyan {
-    color: var(--color-cyan);
-    --glow-color: var(--color-cyan-glow);
+    color: var(--color-p1);
+    --theme-color: var(--color-p1);
+    --theme-bg: var(--color-p1-muted);
+    --theme-border: var(--color-p1-border);
 }
 .player-2, .player-magenta {
-    color: var(--color-magenta);
-    --glow-color: var(--color-magenta-glow);
+    color: var(--color-p2);
+    --theme-color: var(--color-p2);
+    --theme-bg: var(--color-p2-muted);
+    --theme-border: var(--color-p2-border);
 }
 .player-3, .player-lime {
-    color: var(--color-lime);
-    --glow-color: var(--color-lime-glow);
+    color: var(--color-p3);
+    --theme-color: var(--color-p3);
+    --theme-bg: var(--color-p3-muted);
+    --theme-border: var(--color-p3-border);
 }
 .player-4, .player-gold {
-    color: var(--color-gold);
-    --glow-color: var(--color-gold-glow);
+    color: var(--color-p4);
+    --theme-color: var(--color-p4);
+    --theme-bg: var(--color-p4-muted);
+    --theme-border: var(--color-p4-border);
 }
 .dormant {
-    color: #555c70 !important;
-    opacity: 0.5;
+    color: #555c6d !important;
+    opacity: 0.55;
+    filter: grayscale(0.85);
 }

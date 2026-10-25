@@ -1,18 +1,18 @@
 <div align="center">
 
-# ⚡ NEON FOUR CHESS ⚡
-### *The Cybernetic 4-Player Tactical Chess Arena*
+# ♟️ QUAD CHESS: 4-PLAYER GRANDMASTER ♟️
+### *Professional Competitive Four-Player Tournament Platform*
 
-[![Python](https://img.shields.io/badge/Python-3.14%2B-00f3ff?style=for-the-badge&logo=python&logoColor=black)](https://www.python.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.115%2B-ff007f?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
-[![WebSockets](https://img.shields.io/badge/WebSockets-Real--Time-39ff14?style=for-the-badge&logo=websocket&logoColor=black)](https://websockets.readthedocs.io/)
-[![Capacitor](https://img.shields.io/badge/Capacitor-Android%20Ready-ffd700?style=for-the-badge&logo=capacitor&logoColor=black)](https://capacitorjs.com/)
-[![Tests](https://img.shields.io/badge/Tests-14%20Passed-00f3ff?style=for-the-badge&logo=pytest&logoColor=black)](backend/tests/)
+[![Python](https://img.shields.io/badge/Python-3.14%2B-0ea5e9?style=for-the-badge&logo=python&logoColor=black)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115%2B-ec4899?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![WebSockets](https://img.shields.io/badge/WebSockets-Real--Time-10b981?style=for-the-badge&logo=websocket&logoColor=black)](https://websockets.readthedocs.io/)
+[![Capacitor](https://img.shields.io/badge/Capacitor-Android%20Ready-f59e0b?style=for-the-badge&logo=capacitor&logoColor=black)](https://capacitorjs.com/)
+[![Tests](https://img.shields.io/badge/Tests-14%20Passed-0ea5e9?style=for-the-badge&logo=pytest&logoColor=black)](backend/tests/)
 [![License](https://img.shields.io/badge/License-MIT-ffffff?style=for-the-badge)](LICENSE)
 
 <br/>
 
-**Neon Four Chess** is a high-octane, four-player tactical chess battleground built on an authentic **14×14 cross-shaped arena**. Featuring server-authoritative move validation, zero-latency WebSockets multiplayer, pass-and-play local combat, synthesized Web Audio sound effects, and native Android packaging with Capacitor.
+**Quad Chess (Four-Player Grandmaster)** is a professional, tournament-grade four-player chess platform built on an authentic **14×14 cross-shaped arena**. Inspired by modern competitive platforms (Chess.com, Lichess, World Championship broadcasts), it features a mature dark charcoal and graphite aesthetic, realistic Staunton 3D-styled pieces, acoustic wood piece audio, four distinct game modes (Online Multiplayer, Intelligent AI Bots, 2v2 Alliance, and Local Pass & Play), tactical daily puzzles, global leaderboards, digital clocks, and native Capacitor Android packaging.
 
 [🎮 Features](#-key-features) • [📜 Rules of Engagement](#-rules-of-engagement) • [🗺️ Board Architecture](#️-board-architecture) • [⚔️ Commanders](#️-the-four-neon-commanders) • [🚀 Quickstart](#-quickstart-guide) • [📱 Android Build](#-android-build--deployment) • [📡 API & WebSockets](#-api--websocket-protocol)
 
@@ -24,14 +24,16 @@
 
 | Mode / System | Description |
 |---|---|
-| **⚔️ 4-Player Cross Arena** | Authentic 14×14 grid with 3×3 corner voids (160 active squares) and 4 symmetric armies. |
-| **🌐 Real-Time Multiplayer** | Instant room creation with 6-character room codes (`NEON42`), live WebSocket turn sync, and presence tracking. |
-| **🛡️ Authoritative Backend** | Python FastAPI engine validates every move, turn order, castling right, and promotion server-side. |
-| **📱 Local Pass & Play** | Play with 4 commanders on a single mobile device or desktop with optional turn-privacy shields and move undo. |
-| **🔊 Synthesized Web Audio** | Pure procedural sci-fi audio effects (movement chime, laser capture zap, alarm check pulse, victory synth fanfare) with zero external assets. |
-| **🤖 Capacitor Android Ready** | Native Android project with custom app icons, cyberpunk splash screens, and LAN configuration for physical phones. |
-| **🔄 Dynamic Board Rotation** | Rotate the board manually by 90° or enable auto-rotation to align with the active commander's perspective. |
-| **💬 Tactical Quick Chat** | In-game neon emote toasts (*"Check!"*, *"Good move!"*, *"GG!"*) for real-time multiplayer banter. |
+| **⚔️ 14×14 Tournament Arena** | Authentic 160-square cross-shaped board with 3×3 corner voids, algebraic coordinate markings, and smooth piece translation animations. |
+| **🎨 Charcoal & Graphite Theme** | Minimalist dark aesthetic with subtle Cyan, Magenta, Emerald, and Gold accents, realistic Staunton piece vectors, and dark slate squares. |
+| **🤖 Tactical AI Bots** | Full single-player vs AI mode with 3 intelligent bots and selectable tactical tiers: Novice (800), Club (1400), and Master (2000). |
+| **🤝 2v2 Team Alliance** | Team combat format: South (Cyan) & North (Lime) alliance battle West (Magenta) & East (Gold) with joint checkmate objectives. |
+| **🌐 Online Multiplayer** | Instant room creation with 6-character room codes (`QUAD42`), authoritative server validation, and real-time WebSockets synchronization. |
+| **📱 Local Pass & Play** | Couch multiplayer on a single device with turn-privacy screens, auto-board rotation, and move undo. |
+| **🧩 Tactical Daily Puzzles** | Multi-army chess puzzles with rating tracking, fork attacks, queen diversion sacrifices, and solution verifier. |
+| **🏆 Global Leaderboards** | Competitive Elo rankings, win-rate metrics, leagues (Diamond & Master), and player profile statistics. |
+| **🔊 Acoustic Chess Audio** | Authentic acoustic wood piece impacts, double capture knocks, harmonic check chimes, and tournament victory fanfares synthesized in Web Audio. |
+| **💳 Grandmaster VIP & Themes** | Board finish customizer (Tournament Slate, Walnut Wood, Obsidian Carbon, Carrara Marble) and reserved clean AdMob banner container. |
 
 ---
 

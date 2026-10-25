@@ -3,37 +3,50 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <meta name="theme-color" content="#0a0a14">
-    <meta name="description" content="Neon Four Chess - Futuristic 4-Player Chess Mobile & Online Game">
-    <title>Neon Four Chess | 4-Player Battle Arena</title>
+    <meta name="theme-color" content="#0d0e12">
+    <meta name="description" content="Quad Chess - Professional 4-Player Competitive Tournament Chess Platform">
+    <title>Quad Chess | 4-Player Grandmaster Arena</title>
 
-    <!-- Google Fonts for Futuristic Cyberpunk Typography -->
+    <!-- Google Fonts for Modern Competitive Chess Typography -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
 
-    <!-- CSS Design Tokens & Layout -->
+    <!-- CSS Design Tokens & Stylesheet -->
     <link rel="stylesheet" href="css/neon-theme.css">
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
     <div id="app-root">
-        <!-- Top Navigation Header -->
+        <!-- ==================== TOP NAVIGATION HEADER ==================== -->
         <header id="game-header">
             <div class="header-left">
-                <button id="btn-nav-menu" class="icon-btn" title="Main Menu">☰</button>
-                <div class="game-logo">
-                    <span class="logo-neon">NEON</span>
-                    <span class="logo-sub">FOUR CHESS</span>
+                <button id="btn-back-home" class="icon-btn header-back-btn hidden" title="Back to Dashboard">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+                </button>
+                <div class="brand-container" id="nav-brand-logo">
+                    <div class="brand-emblem">
+                        <span class="emblem-facet p1"></span>
+                        <span class="emblem-facet p2"></span>
+                        <span class="emblem-facet p3"></span>
+                        <span class="emblem-facet p4"></span>
+                    </div>
+                    <div class="brand-text">
+                        <span class="brand-title">QUAD CHESS</span>
+                        <span class="brand-badge">GRANDMASTER</span>
+                    </div>
                 </div>
             </div>
 
             <div class="header-center">
-                <div id="turn-badge" class="turn-indicator">Cyan's Turn</div>
+                <!-- Arena Active Turn & Room Badge (visible in game view) -->
+                <div id="turn-badge" class="turn-indicator hidden">Cyan's Move</div>
                 <div id="room-code-tag" class="room-tag hidden">
-                    <span>ROOM:</span>
+                    <span class="tag-label">ROOM</span>
                     <strong id="current-room-code">------</strong>
-                    <button id="btn-copy-code" class="mini-icon-btn" title="Copy Room Code">📋</button>
+                    <button id="btn-copy-code" class="mini-icon-btn" title="Copy Room Code">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                    </button>
                 </div>
             </div>
 
@@ -42,113 +55,575 @@
                     <span id="net-status-dot" class="status-dot offline"></span>
                     <span id="net-status-label">OFFLINE</span>
                 </div>
+                <button id="btn-membership-header" class="icon-btn vip-crown-btn" title="Grandmaster Pass">👑</button>
                 <button id="btn-sound-toggle" class="icon-btn" title="Toggle Sound FX">🔊</button>
-                <button id="btn-nav-rules" class="icon-btn" title="Game Rules">?</button>
+                <button id="btn-nav-rules" class="icon-btn" title="Official Rules">?</button>
                 <button id="btn-nav-settings" class="icon-btn" title="Settings">⚙</button>
+                <button id="btn-nav-menu" class="icon-btn legacy-menu-btn hidden" title="Menu">☰</button>
             </div>
         </header>
 
-        <!-- Player Status Bar (Top: North Lime & West/East mini) -->
-        <section class="players-hud top-hud">
-            <!-- Player 2: West Magenta -->
-            <div id="player-card-2" class="player-card player-magenta">
-                <div class="player-avatar">M</div>
-                <div class="player-meta">
-                    <div class="player-name-row">
-                        <span class="player-conn-dot online"></span>
-                        <span class="player-name">Magenta (West)</span>
+        <!-- ==================== MAIN CONTENT VIEWS ==================== -->
+        <div id="views-container">
+            
+            <!-- VIEW 1: HOME / DASHBOARD SCREEN -->
+            <section id="view-home" class="app-view active-view">
+                <div class="dashboard-scrollable">
+                    
+                    <!-- 1. Player Profile Card -->
+                    <div class="player-profile-hero">
+                        <div class="profile-avatar-wrapper">
+                            <div class="avatar-ring">
+                                <img src="assets/icon.png" alt="Avatar" class="profile-avatar-img" onerror="this.src=''; this.innerHTML='♟'"/>
+                            </div>
+                            <span class="avatar-rank-badge">GM</span>
+                        </div>
+                        <div class="profile-details">
+                            <div class="profile-name-row">
+                                <h2 class="profile-username" id="dash-player-name">Commander</h2>
+                                <span class="league-pill">Diamond III</span>
+                            </div>
+                            <div class="profile-stats-row">
+                                <div class="profile-stat-box">
+                                    <span class="stat-value" id="dash-player-rating">1540</span>
+                                    <span class="stat-label">Rapid Elo</span>
+                                </div>
+                                <div class="profile-stat-box">
+                                    <span class="stat-value" id="dash-win-rate">68%</span>
+                                    <span class="stat-label">Win Rate</span>
+                                </div>
+                                <div class="profile-stat-box">
+                                    <span class="stat-value" id="dash-global-rank">#412</span>
+                                    <span class="stat-label">Rank</span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <div class="player-status-row">
-                        <span class="status-badge waiting">WAITING</span>
-                        <div class="captured-pieces"></div>
+
+                    <!-- 2. Hero Quick Play Banner -->
+                    <div class="hero-play-banner" id="btn-quick-play">
+                        <div class="hero-banner-content">
+                            <span class="banner-sub">4-PLAYER TOURNAMENT ARENA</span>
+                            <h3 class="banner-title">Quick Match</h3>
+                            <p class="banner-desc">Jump straight into battle against tactical commanders</p>
+                        </div>
+                        <button class="primary-play-btn">
+                            <span class="play-icon">▶</span>
+                            <span>PLAY</span>
+                        </button>
+                    </div>
+
+                    <!-- 3. Game Mode Cards Grid -->
+                    <div class="section-header">
+                        <h3>Game Modes</h3>
+                        <span class="section-hint">Select Battle Format</span>
+                    </div>
+
+                    <div class="modes-grid">
+                        <!-- Mode 1: Online Arena -->
+                        <div class="mode-card mode-online" id="card-mode-online">
+                            <div class="mode-icon-circle online-icon">⚡</div>
+                            <div class="mode-info">
+                                <h4>Online Multiplayer</h4>
+                                <p>Host or join 4-player competitive rooms worldwide</p>
+                            </div>
+                            <span class="mode-badge live-badge">LIVE</span>
+                        </div>
+
+                        <!-- Mode 2: Play vs AI -->
+                        <div class="mode-card mode-ai" id="card-mode-ai">
+                            <div class="mode-icon-circle ai-icon">🤖</div>
+                            <div class="mode-info">
+                                <h4>Play vs AI Bots</h4>
+                                <p>Battle 3 intelligent bots (Novice, Club, Master)</p>
+                            </div>
+                            <span class="mode-badge">OFFLINE</span>
+                        </div>
+
+                        <!-- Mode 3: 2v2 Team Battle -->
+                        <div class="mode-card mode-team" id="card-mode-team">
+                            <div class="mode-icon-circle team-icon">🤝</div>
+                            <div class="mode-info">
+                                <h4>2v2 Team Battle</h4>
+                                <p>South & North allies vs West & East rivals</p>
+                            </div>
+                            <span class="mode-badge team-badge">ALLIANCE</span>
+                        </div>
+
+                        <!-- Mode 4: Local Pass & Play -->
+                        <div class="mode-card mode-local" id="card-mode-local">
+                            <div class="mode-icon-circle local-icon">📱</div>
+                            <div class="mode-info">
+                                <h4>Pass & Play</h4>
+                                <p>4 commanders competing on a single device</p>
+                            </div>
+                            <span class="mode-badge">LOCAL</span>
+                        </div>
+                    </div>
+
+                    <!-- 4. Daily Challenge & Tactical Puzzle -->
+                    <div class="section-header">
+                        <h3>Training & Quests</h3>
+                        <span class="section-hint">Daily Rewards</span>
+                    </div>
+
+                    <div class="quest-row">
+                        <!-- Daily Quest -->
+                        <div class="quest-card" id="card-daily-quest">
+                            <div class="quest-header">
+                                <span class="quest-tag">DAILY OBJECTIVE</span>
+                                <span class="quest-reward">+50 XP</span>
+                            </div>
+                            <h4 class="quest-title">Coronation March</h4>
+                            <p class="quest-desc">Promote 2 Pawns to Queens across any mode</p>
+                            <div class="quest-progress-bar">
+                                <div class="progress-fill" style="width: 50%;"></div>
+                            </div>
+                            <div class="quest-footer">
+                                <span>1 / 2 Completed</span>
+                                <button class="mini-action-btn" id="btn-claim-quest">Active</button>
+                            </div>
+                        </div>
+
+                        <!-- Daily Puzzle -->
+                        <div class="quest-card puzzle-hero-card" id="card-daily-puzzle">
+                            <div class="quest-header">
+                                <span class="quest-tag puzzle-tag">PUZZLE OF THE DAY</span>
+                                <span class="quest-reward">1450 Elo</span>
+                            </div>
+                            <h4 class="quest-title">The Quadrant Fork</h4>
+                            <p class="quest-desc">Cyan to move. Strike a devastating multi-army attack.</p>
+                            <div class="puzzle-mini-preview">
+                                <span class="puzzle-icon">🧩</span>
+                                <span>Find the winning knight sequence</span>
+                            </div>
+                            <div class="quest-footer">
+                                <span>Difficulty: Intermediate</span>
+                                <button class="mini-action-btn primary" id="btn-start-daily-puzzle">Solve</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 5. Recent Matches Feed -->
+                    <div class="section-header">
+                        <h3>Recent Match History</h3>
+                        <button class="text-link-btn" id="btn-view-all-history">View All</button>
+                    </div>
+
+                    <div class="recent-matches-container" id="dash-recent-matches">
+                        <div class="match-item skeleton">
+                            <div class="match-col">
+                                <strong>Room #NEON42</strong>
+                                <small>4-Player Arena</small>
+                            </div>
+                            <div class="match-result victory">Cyan Victory</div>
+                            <div class="match-moves">32 Turns</div>
+                        </div>
+                    </div>
+
+                    <!-- Clean AdMob Banner Container Placeholder -->
+                    <div id="admob-banner-container" class="admob-banner-slot">
+                        <span class="admob-label">SPONSORED PLATFORM PARTNER</span>
+                        <div class="admob-placeholder">
+                            <span>Google AdMob Banner Area (Ready for Live ID)</span>
+                            <a href="#" id="link-upgrade-adfree">Remove Ads with Grandmaster Pass</a>
+                        </div>
+                    </div>
+
+                </div>
+            </section>
+
+            <!-- VIEW 2: GAME ARENA SCREEN (FOUR-PLAYER CHESSBOARD) -->
+            <section id="view-game" class="app-view">
+                
+                <!-- In-Game Subheader -->
+                <div class="arena-subheader">
+                    <div class="arena-match-type">
+                        <span class="arena-indicator-dot"></span>
+                        <span id="arena-mode-label">4-Player Blitz (10+0)</span>
+                    </div>
+                    <div class="arena-actions">
+                        <button id="btn-toggle-notation" class="icon-pill-btn" title="Move Notation">
+                            <span>📜</span> Notation
+                        </button>
                     </div>
                 </div>
-            </div>
 
-            <!-- Player 3: North Lime -->
-            <div id="player-card-3" class="player-card player-lime">
-                <div class="player-avatar">L</div>
-                <div class="player-meta">
-                    <div class="player-name-row">
-                        <span class="player-conn-dot online"></span>
-                        <span class="player-name">Lime (North)</span>
+                <!-- Top HUD: North (Lime), West (Magenta), East (Gold) -->
+                <section class="players-hud top-hud">
+                    <!-- Player 2: West Magenta -->
+                    <div id="player-card-2" class="player-card player-magenta">
+                        <div class="player-avatar-slot">
+                            <div class="avatar-circle">M</div>
+                            <span class="player-conn-dot offline"></span>
+                        </div>
+                        <div class="player-meta">
+                            <div class="player-name-row">
+                                <span class="player-name">Magenta</span>
+                                <span class="player-rating">1520</span>
+                            </div>
+                            <div class="player-status-row">
+                                <span class="status-badge waiting">WAITING</span>
+                                <div class="player-clock" id="clock-p2">10:00</div>
+                            </div>
+                            <div class="captured-pieces"></div>
+                        </div>
                     </div>
-                    <div class="player-status-row">
-                        <span class="status-badge waiting">WAITING</span>
-                        <div class="captured-pieces"></div>
+
+                    <!-- Player 3: North Lime -->
+                    <div id="player-card-3" class="player-card player-lime">
+                        <div class="player-avatar-slot">
+                            <div class="avatar-circle">L</div>
+                            <span class="player-conn-dot offline"></span>
+                        </div>
+                        <div class="player-meta">
+                            <div class="player-name-row">
+                                <span class="player-name">Lime</span>
+                                <span class="player-rating">1560</span>
+                            </div>
+                            <div class="player-status-row">
+                                <span class="status-badge waiting">WAITING</span>
+                                <div class="player-clock" id="clock-p3">10:00</div>
+                            </div>
+                            <div class="captured-pieces"></div>
+                        </div>
+                    </div>
+
+                    <!-- Player 4: East Gold -->
+                    <div id="player-card-4" class="player-card player-gold">
+                        <div class="player-avatar-slot">
+                            <div class="avatar-circle">G</div>
+                            <span class="player-conn-dot offline"></span>
+                        </div>
+                        <div class="player-meta">
+                            <div class="player-name-row">
+                                <span class="player-name">Gold</span>
+                                <span class="player-rating">1505</span>
+                            </div>
+                            <div class="player-status-row">
+                                <span class="status-badge waiting">WAITING</span>
+                                <div class="player-clock" id="clock-p4">10:00</div>
+                            </div>
+                            <div class="captured-pieces"></div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Center 14x14 Chessboard Arena -->
+                <main id="board-arena">
+                    <div id="board-scaler">
+                        <div id="chessboard" class="chessboard-grid">
+                            <!-- 14x14 Squares generated dynamically by JS -->
+                        </div>
+                    </div>
+                </main>
+
+                <!-- Bottom HUD: South Cyan (User / P1) -->
+                <section class="players-hud bottom-hud">
+                    <div id="player-card-1" class="player-card player-cyan active-turn-card">
+                        <div class="player-avatar-slot">
+                            <div class="avatar-circle">C</div>
+                            <span class="player-conn-dot online"></span>
+                        </div>
+                        <div class="player-meta">
+                            <div class="player-name-row">
+                                <span class="player-name" id="hud-p1-name">Cyan (South)</span>
+                                <span class="player-rating" id="hud-p1-rating">1540</span>
+                            </div>
+                            <div class="player-status-row">
+                                <span class="status-badge thinking">YOUR TURN</span>
+                                <div class="player-clock active-clock" id="clock-p1">10:00</div>
+                            </div>
+                            <div class="captured-pieces"></div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Move Notation Slide-Over Drawer -->
+                <div id="notation-drawer" class="notation-drawer hidden">
+                    <div class="notation-header">
+                        <h4>TOURNAMENT NOTATION</h4>
+                        <button id="btn-close-notation" class="mini-icon-btn">✕</button>
+                    </div>
+                    <div id="move-history-list" class="notation-body">
+                        <!-- Move items inserted dynamically -->
                     </div>
                 </div>
-            </div>
 
-            <!-- Player 4: East Gold -->
-            <div id="player-card-4" class="player-card player-gold">
-                <div class="player-avatar">G</div>
-                <div class="player-meta">
-                    <div class="player-name-row">
-                        <span class="player-conn-dot online"></span>
-                        <span class="player-name">Gold (East)</span>
+                <!-- Quick Chat Emotes Bar -->
+                <div class="quick-chat-bar">
+                    <button class="emote-btn" data-text="Good move!">👍 Nice Move</button>
+                    <button class="emote-btn" data-text="Checkmate threat!">🎯 Threat!</button>
+                    <button class="emote-btn" data-text="Well played!">⚡ Well Played</button>
+                    <button class="emote-btn" data-text="Good game!">🏆 GG</button>
+                </div>
+
+                <!-- In-Game Controls Footer -->
+                <footer id="game-controls">
+                    <button id="btn-rotate" class="ctrl-btn" title="Rotate Board 90°">🔄 Rotate</button>
+                    <button id="btn-undo" class="ctrl-btn" title="Undo Move (Local/AI Mode)">↩ Undo</button>
+                    <button id="btn-restart" class="ctrl-btn" title="Restart Game">🔄 Restart</button>
+                    <button id="btn-resign" class="ctrl-btn resign-btn" title="Resign Match">🏳 Resign</button>
+                </footer>
+            </section>
+
+            <!-- VIEW 3: TACTICAL PUZZLES SCREEN -->
+            <section id="view-puzzles" class="app-view">
+                <div class="dashboard-scrollable">
+                    <div class="screen-hero">
+                        <h2>Tactical Puzzles</h2>
+                        <p>Master multi-front 4-player tactics, forks, and coronation attacks</p>
                     </div>
-                    <div class="player-status-row">
-                        <span class="status-badge waiting">WAITING</span>
-                        <div class="captured-pieces"></div>
+
+                    <div class="puzzle-rating-banner">
+                        <div class="puzzle-rating-val">1450</div>
+                        <div class="puzzle-rating-meta">
+                            <strong>Your Puzzle Rating</strong>
+                            <small>Streak: 4 Solved Today</small>
+                        </div>
+                    </div>
+
+                    <div class="puzzles-list" id="puzzles-container">
+                        <!-- Injected via app.js -->
                     </div>
                 </div>
-            </div>
-        </section>
+            </section>
 
-        <!-- Main Chess Arena Viewport -->
-        <main id="board-arena">
-            <div id="board-scaler">
-                <div id="chessboard" class="chessboard-grid">
-                    <!-- 14x14 Squares generated dynamically by JS -->
-                </div>
-            </div>
-        </main>
-
-        <!-- Player Status Bar (Bottom: South Cyan) -->
-        <section class="players-hud bottom-hud">
-            <!-- Player 1: South Cyan -->
-            <div id="player-card-1" class="player-card player-cyan active-turn-card">
-                <div class="player-avatar">C</div>
-                <div class="player-meta">
-                    <div class="player-name-row">
-                        <span class="player-conn-dot online"></span>
-                        <span class="player-name">Cyan (South)</span>
+            <!-- VIEW 4: LEADERBOARD SCREEN -->
+            <section id="view-leaderboard" class="app-view">
+                <div class="dashboard-scrollable">
+                    <div class="screen-hero">
+                        <h2>Global Leaderboard</h2>
+                        <p>Top grandmasters across the 4-player competitive league</p>
                     </div>
-                    <div class="player-status-row">
-                        <span class="status-badge thinking">THINKING</span>
-                        <div class="captured-pieces"></div>
+
+                    <div class="leaderboard-tabs">
+                        <button class="lb-tab active" data-tab="global">Global Top</button>
+                        <button class="lb-tab" data-tab="leagues">Diamond League</button>
+                        <button class="lb-tab" data-tab="friends">Friends</button>
+                    </div>
+
+                    <div class="leaderboard-table-card">
+                        <div class="lb-header-row">
+                            <span class="lb-col-rank">RANK</span>
+                            <span class="lb-col-player">PLAYER</span>
+                            <span class="lb-col-rating">RATING</span>
+                            <span class="lb-col-win">WIN%</span>
+                        </div>
+                        <div class="lb-body" id="leaderboard-body">
+                            <!-- Injected via app.js -->
+                        </div>
                     </div>
                 </div>
-            </div>
-        </section>
+            </section>
 
-        <!-- Quick Chat Emotes -->
-        <div class="quick-chat-bar">
-            <button class="emote-btn" data-text="Check!">🎯 Check!</button>
-            <button class="emote-btn" data-text="Good move!">⚡ Nice!</button>
-            <button class="emote-btn" data-text="Watch out!">⚠️ Caution</button>
-            <button class="emote-btn" data-text="GG!">🏆 GG</button>
+            <!-- VIEW 5: FRIENDS SCREEN -->
+            <section id="view-friends" class="app-view">
+                <div class="dashboard-scrollable">
+                    <div class="screen-hero">
+                        <h2>Friends & Challenges</h2>
+                        <p>Invite companions to custom 4-player rooms or 2v2 alliances</p>
+                    </div>
+
+                    <div class="friends-action-bar">
+                        <button class="primary-play-btn" id="btn-open-create-room">
+                            <span>⚡</span> Create Friendly Arena
+                        </button>
+                        <button class="secondary-btn" id="btn-open-join-room">
+                            <span>🚀</span> Join with Room Code
+                        </button>
+                    </div>
+
+                    <div class="section-header">
+                        <h3>Online Friends</h3>
+                        <span class="section-hint">3 Active</span>
+                    </div>
+
+                    <div class="friends-list" id="friends-list-container">
+                        <!-- Injected via app.js -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- VIEW 6: PROFILE & STATS SCREEN -->
+            <section id="view-profile" class="app-view">
+                <div class="dashboard-scrollable">
+                    <div class="profile-header-card">
+                        <div class="profile-banner-top">
+                            <div class="profile-big-avatar">
+                                <span class="avatar-letter">C</span>
+                                <button class="avatar-edit-badge" id="btn-change-avatar">✏</button>
+                            </div>
+                            <div class="profile-header-info">
+                                <h3 id="profile-full-name">Grandmaster</h3>
+                                <span class="profile-subtitle">Diamond League · Member since 2026</span>
+                            </div>
+                        </div>
+
+                        <div class="stats-overview-grid">
+                            <div class="stat-card">
+                                <span class="stat-num" id="stat-total-games">128</span>
+                                <span class="stat-lbl">Matches</span>
+                            </div>
+                            <div class="stat-card">
+                                <span class="stat-num" id="stat-wins" style="color:var(--color-p3)">87</span>
+                                <span class="stat-lbl">Victories</span>
+                            </div>
+                            <div class="stat-card">
+                                <span class="stat-num" id="stat-winrate" style="color:var(--color-p1)">68%</span>
+                                <span class="stat-lbl">Win Rate</span>
+                            </div>
+                            <div class="stat-card">
+                                <span class="stat-num" id="stat-streak" style="color:var(--color-p4)">7</span>
+                                <span class="stat-lbl">Best Streak</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="section-header">
+                        <h3>Army Mastery (By Corner)</h3>
+                    </div>
+
+                    <div class="army-mastery-grid">
+                        <div class="mastery-item player-1">
+                            <span class="army-badge">South Cyan</span>
+                            <strong>72% Win Rate</strong>
+                            <small>64 Matches</small>
+                        </div>
+                        <div class="mastery-item player-2">
+                            <span class="army-badge">West Magenta</span>
+                            <strong>65% Win Rate</strong>
+                            <small>26 Matches</small>
+                        </div>
+                        <div class="mastery-item player-3">
+                            <span class="army-badge">North Lime</span>
+                            <strong>67% Win Rate</strong>
+                            <small>24 Matches</small>
+                        </div>
+                        <div class="mastery-item player-4">
+                            <span class="army-badge">East Gold</span>
+                            <strong>61% Win Rate</strong>
+                            <small>14 Matches</small>
+                        </div>
+                    </div>
+
+                    <div class="section-header">
+                        <h3>Achievements</h3>
+                    </div>
+
+                    <div class="achievements-list">
+                        <div class="achievement-badge-card unlocked">
+                            <span class="ach-icon">👑</span>
+                            <div class="ach-meta">
+                                <strong>Coronation Master</strong>
+                                <small>Promoted 50 Pawns in tournament play</small>
+                            </div>
+                        </div>
+                        <div class="achievement-badge-card unlocked">
+                            <span class="ach-icon">🛡</span>
+                            <div class="ach-meta">
+                                <strong>Last Stand</strong>
+                                <small>Won a match after being placed in check 5 times</small>
+                            </div>
+                        </div>
+                        <div class="achievement-badge-card">
+                            <span class="ach-icon">⚡</span>
+                            <div class="ach-meta">
+                                <strong>Grand Slam</strong>
+                                <small>Checkmate all 3 rival kings in a single match</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- VIEW 7: MEMBERSHIP & THEMES STORE -->
+            <section id="view-membership" class="app-view">
+                <div class="dashboard-scrollable">
+                    <div class="membership-vip-banner">
+                        <div class="vip-crown-large">👑</div>
+                        <h2>Grandmaster Pass</h2>
+                        <p>Unlock the ultimate tournament experience with premium board finishes, luxury Staunton piece styles, deep cloud engine analysis, and an ad-free interface.</p>
+                        <button class="vip-upgrade-btn" id="btn-activate-pass">
+                            Unlock Grandmaster Tier
+                        </button>
+                    </div>
+
+                    <div class="section-header">
+                        <h3>Board Finishes</h3>
+                    </div>
+
+                    <div class="themes-grid">
+                        <div class="theme-card active" data-theme="slate">
+                            <div class="theme-preview theme-slate-prev"></div>
+                            <h4>Tournament Slate</h4>
+                            <span class="theme-status active-status">Applied</span>
+                        </div>
+                        <div class="theme-card" data-theme="wood">
+                            <div class="theme-preview theme-wood-prev"></div>
+                            <h4>Walnut & Maple</h4>
+                            <span class="theme-status">VIP Free</span>
+                        </div>
+                        <div class="theme-card" data-theme="carbon">
+                            <div class="theme-preview theme-carbon-prev"></div>
+                            <h4>Obsidian Carbon</h4>
+                            <span class="theme-status">VIP Free</span>
+                        </div>
+                        <div class="theme-card" data-theme="marble">
+                            <div class="theme-preview theme-marble-prev"></div>
+                            <h4>Royal Carrara Marble</h4>
+                            <span class="theme-status">VIP Free</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
         </div>
 
-        <!-- In-Game Controls Bar -->
-        <footer id="game-controls">
-            <button id="btn-rotate" class="ctrl-btn" title="Rotate Board 90°">🔄 Rotate</button>
-            <button id="btn-undo" class="ctrl-btn" title="Undo Move (Local Mode)">↩ Undo</button>
-            <button id="btn-restart" class="ctrl-btn" title="Restart Game">🔄 Restart</button>
-            <button id="btn-resign" class="ctrl-btn resign-btn" title="Resign Match">🏳 Resign</button>
-        </footer>
+        <!-- ==================== SLEEK BOTTOM NAVIGATION BAR ==================== -->
+        <nav id="bottom-nav-bar">
+            <button class="nav-tab-btn active" data-target="view-home">
+                <span class="nav-icon">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                </span>
+                <span class="nav-label">Home</span>
+            </button>
+            <button class="nav-tab-btn" data-target="view-game">
+                <span class="nav-icon">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
+                </span>
+                <span class="nav-label">Arena</span>
+            </button>
+            <button class="nav-tab-btn" data-target="view-puzzles">
+                <span class="nav-icon">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M19.439 7.85c0-1.571-.944-2.85-2.109-2.85s-2.11 1.279-2.11 2.85c0 .324.041.637.116.93a5.52 5.52 0 0 0-3.336 0c.075-.293.116-.606.116-.93 0-1.571-.944-2.85-2.11-2.85s-2.109 1.279-2.109 2.85c0 1.267.615 2.339 1.488 2.698A5.495 5.495 0 0 0 9 14.5c0 1.52.617 2.9 1.621 3.904A2.85 2.85 0 0 0 12 21a2.85 2.85 0 0 0 1.379-2.596A5.5 5.5 0 0 0 15 14.5c0-1.52-.617-2.9-1.621-3.904.873-.359 1.488-1.431 1.488-2.698z"/></svg>
+                </span>
+                <span class="nav-label">Puzzles</span>
+            </button>
+            <button class="nav-tab-btn" data-target="view-leaderboard">
+                <span class="nav-icon">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.45 1-1 1H7c-.55 0-1-.45-1-1v-2.34"/><path d="M18 14.66V17c0 .55-.45 1-1 1h-2c-.55 0-1-.45-1-1v-2.34"/><path d="M6 4h12v7a6 6 0 0 1-12 0V4z"/></svg>
+                </span>
+                <span class="nav-label">Ranks</span>
+            </button>
+            <button class="nav-tab-btn" data-target="view-profile">
+                <span class="nav-icon">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                </span>
+                <span class="nav-label">Profile</span>
+            </button>
+        </nav>
 
         <!-- Toast Notifications Container -->
         <div id="toast-container"></div>
 
-        <!-- ==================== MODALS ==================== -->
+        <!-- ==================== TOURNAMENT MODALS ==================== -->
 
-        <!-- 1. Main Menu Modal -->
+        <!-- 1. Main Menu Modal (Legacy compatibility) -->
         <div id="menu-modal" class="game-modal hidden">
             <div class="modal-card">
                 <div class="modal-header">
-                    <h2>NEON ARENA</h2>
+                    <h2>MATCH SELECTOR</h2>
                     <button class="modal-close-btn">✕</button>
                 </div>
                 <div class="modal-body menu-options">
@@ -163,62 +638,90 @@
                         <span class="btn-icon">⚡</span>
                         <div class="btn-text">
                             <strong>Create Online Room</strong>
-                            <small>Host a room with custom code</small>
+                            <small>Host custom match room code</small>
                         </div>
                     </button>
                     <button id="btn-mode-join" class="neon-btn magenta-btn">
                         <span class="btn-icon">🚀</span>
                         <div class="btn-text">
                             <strong>Join Online Room</strong>
-                            <small>Enter a friend's room code</small>
+                            <small>Enter a companion's room code</small>
                         </div>
                     </button>
                 </div>
             </div>
         </div>
 
-        <!-- 2. Create Room Modal -->
+        <!-- 2. Create Online Room Modal -->
         <div id="create-room-modal" class="game-modal hidden">
             <div class="modal-card">
                 <div class="modal-header">
-                    <h2>HOST ARENA</h2>
+                    <h2>HOST TOURNAMENT ARENA</h2>
                     <button class="modal-close-btn">✕</button>
                 </div>
                 <form id="form-create-room" class="modal-body">
                     <div class="form-group">
                         <label for="create-player-name">Your Commander Name:</label>
-                        <input type="text" id="create-player-name" value="Player 1" maxlength="25" required>
+                        <input type="text" id="create-player-name" value="Grandmaster" maxlength="25" required>
                     </div>
-                    <button type="submit" class="neon-btn primary-btn submit-btn">Create & Play</button>
+                    <button type="submit" class="neon-btn primary-btn submit-btn">Create & Enter Arena</button>
                 </form>
             </div>
         </div>
 
-        <!-- 3. Join Room Modal -->
+        <!-- 3. Join Online Room Modal -->
         <div id="join-room-modal" class="game-modal hidden">
             <div class="modal-card">
                 <div class="modal-header">
-                    <h2>JOIN ARENA</h2>
+                    <h2>ENTER ARENA CODE</h2>
                     <button class="modal-close-btn">✕</button>
                 </div>
                 <form id="form-join-room" class="modal-body">
                     <div class="form-group">
-                        <label for="join-room-code">Room Code (6 Letters):</label>
-                        <input type="text" id="join-room-code" placeholder="e.g. NEON42" maxlength="10" required>
+                        <label for="join-room-code">Room Code (6 Characters):</label>
+                        <input type="text" id="join-room-code" placeholder="e.g. QUAD42" maxlength="10" required>
                     </div>
                     <div class="form-group">
                         <label for="join-player-name">Your Commander Name:</label>
-                        <input type="text" id="join-player-name" value="Player 2" maxlength="25" required>
+                        <input type="text" id="join-player-name" value="Guest" maxlength="25" required>
                     </div>
                     <button type="submit" class="neon-btn magenta-btn submit-btn">Join Match</button>
                 </form>
             </div>
         </div>
 
-        <!-- 4. Pawn Promotion Modal -->
+        <!-- 4. AI Bot Config Modal -->
+        <div id="ai-modal" class="game-modal hidden">
+            <div class="modal-card">
+                <div class="modal-header">
+                    <h2>PLAY VS AI BOTS</h2>
+                    <button class="modal-close-btn">✕</button>
+                </div>
+                <div class="modal-body">
+                    <p style="color:var(--color-text-secondary); margin-bottom:14px;">Select the tactical difficulty for your 3 AI rival commanders:</p>
+                    <div class="ai-difficulty-selector">
+                        <button class="ai-diff-btn active" data-diff="club">
+                            <strong>Club (1400)</strong>
+                            <small>Balanced positional play & tactics</small>
+                        </button>
+                        <button class="ai-diff-btn" data-diff="master">
+                            <strong>Master (2000)</strong>
+                            <small>Aggressive checks & material defense</small>
+                        </button>
+                        <button class="ai-diff-btn" data-diff="novice">
+                            <strong>Novice (800)</strong>
+                            <small>Relaxed casual play</small>
+                        </button>
+                    </div>
+                    <button id="btn-start-ai-match" class="neon-btn primary-btn submit-btn" style="margin-top:16px;">Start AI Arena</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 5. Pawn Promotion Modal -->
         <div id="promotion-modal" class="game-modal hidden">
             <div class="modal-card promo-modal-card">
-                <h3>PROMOTE PAWN</h3>
+                <h3>CORONATION PROMOTION</h3>
                 <p>Select your upgrade piece:</p>
                 <div id="promotion-options" class="promo-grid">
                     <!-- Buttons inserted dynamically -->
@@ -226,75 +729,75 @@
             </div>
         </div>
 
-        <!-- 5. Pass Device Privacy Modal -->
+        <!-- 6. Pass Device Privacy Modal -->
         <div id="pass-device-modal" class="game-modal hidden">
             <div class="modal-card pass-device-card">
                 <div class="pass-icon">🔄</div>
                 <h2>PASS DEVICE</h2>
-                <p>Pass the phone to <strong id="pass-next-player-name">Magenta</strong></p>
+                <p>Pass the device to <strong id="pass-next-player-name">Magenta</strong></p>
                 <button id="btn-pass-unlock" class="neon-btn primary-btn">I am Ready (Reveal Board)</button>
             </div>
         </div>
 
-        <!-- 6. Game Over Modal -->
+        <!-- 7. Game Over Modal -->
         <div id="gameover-modal" class="game-modal hidden">
             <div class="modal-card gameover-card">
                 <h2 id="gameover-title">VICTORY!</h2>
                 <div id="gameover-details"></div>
                 <div class="modal-actions">
                     <button id="btn-play-again" class="neon-btn primary-btn">Play Again</button>
-                    <button id="btn-gameover-menu" class="neon-btn secondary-btn">Main Menu</button>
+                    <button id="btn-gameover-menu" class="neon-btn secondary-btn">Dashboard</button>
                 </div>
             </div>
         </div>
 
-        <!-- 7. Game Rules Modal -->
+        <!-- 8. Game Rules Modal -->
         <div id="rules-modal" class="game-modal hidden">
             <div class="modal-card rules-card">
                 <div class="modal-header">
-                    <h2>FOUR-PLAYER CHESS RULES</h2>
+                    <h2>OFFICIAL FOUR-PLAYER CHESS RULES</h2>
                     <button class="modal-close-btn">✕</button>
                 </div>
                 <div class="modal-body rules-content">
                     <div class="rule-block">
                         <h4>1. The 14×14 Cross Arena</h4>
-                        <p>Played on a 14×14 board with the 4 corner 3×3 areas removed (160 active squares). Armies start on the 4 banks: Cyan (South), Magenta (West), Lime (North), Gold (East).</p>
+                        <p>Played on a 14×14 board with the four 3×3 corner areas removed (160 active squares). Armies deploy on the four banks: Cyan (South), Magenta (West), Lime (North), and Gold (East).</p>
                     </div>
                     <div class="rule-block">
-                        <h4>2. Turn Order & Progression</h4>
-                        <p>Turns proceed <strong>clockwise</strong>: Cyan → Magenta → Lime → Gold → Cyan. When an eliminated player's turn comes, it is automatically bypassed.</p>
+                        <h4>2. Turn Progression</h4>
+                        <p>Turns proceed <strong>clockwise</strong>: Cyan → Magenta → Lime → Gold. Eliminated players are seamlessly bypassed.</p>
                     </div>
                     <div class="rule-block">
-                        <h4>3. Pawn Mechanics & 8th Rank Promotion</h4>
-                        <p>Pawns move forward into the arena (2 squares on their first move) and capture 1 square diagonally in their forward direction. Pawns promote to a Queen, Rook, Bishop, or Knight upon reaching the <strong>8th rank</strong> relative to their army or opposite perimeter.</p>
+                        <h4>3. 8th-Rank Promotion</h4>
+                        <p>Pawns march forward into the central theater (2 squares on their first move) and capture 1 square diagonally. Upon reaching the <strong>8th rank</strong> relative to their army or the opposite perimeter, pawns promote to Queen, Rook, Bishop, or Knight.</p>
                     </div>
                     <div class="rule-block">
-                        <h4>4. Check, Checkmate & King Elimination</h4>
-                        <p>If an active enemy piece attacks your King, you are in <strong>Check</strong>! On your turn, you must make a move to resolve check. If no legal escape exists, you are <strong>Checkmated</strong> and eliminated.</p>
+                        <h4>4. Check & Elimination</h4>
+                        <p>If an enemy piece attacks your King, you are in <strong>Check</strong>! If no legal evasion exists on your turn, you are eliminated.</p>
                     </div>
                     <div class="rule-block">
                         <h4>5. Dormant Neutral Pieces</h4>
-                        <p>When a player is eliminated or resigns, their King is removed, and their remaining army becomes <strong>neutral obstacles</strong>. They do not attack or move, but can be captured.</p>
+                        <p>When an army is eliminated, its King is removed, and remaining soldiers become <strong>neutral obstacles</strong>. They cannot move or attack, but may be captured for positional clearance.</p>
                     </div>
                     <div class="rule-block">
                         <h4>6. Last Commander Standing</h4>
-                        <p>The last surviving player with their King intact wins the match!</p>
+                        <p>The last player retaining an active King wins the tournament match!</p>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- 8. Settings Modal -->
+        <!-- 9. Settings Modal -->
         <div id="settings-modal" class="game-modal hidden">
             <div class="modal-card">
                 <div class="modal-header">
-                    <h2>SYSTEM SETTINGS</h2>
+                    <h2>PLATFORM PREFERENCES</h2>
                     <button class="modal-close-btn">✕</button>
                 </div>
                 <div class="modal-body">
                     <div class="setting-item">
                         <label for="backend-url-input">Backend Server URL:</label>
-                        <small class="help-text">For Android APK or physical phones, enter server LAN IP (e.g. http://192.168.1.50:8000)</small>
+                        <small class="help-text">For local network play or physical Android APKs, enter server IP (e.g. http://192.168.1.50:8000)</small>
                         <div class="input-with-btn">
                             <input type="text" id="backend-url-input" placeholder="http://localhost:8000">
                             <button id="btn-test-backend" class="mini-btn">Test</button>
@@ -303,18 +806,23 @@
                     </div>
 
                     <div class="setting-item toggle-item">
-                        <span>Sound Effects (Sci-Fi Audio):</span>
+                        <span>Acoustic Sound Effects (Wood impacts & chimes):</span>
                         <input type="checkbox" id="sound-toggle-chk" checked>
                     </div>
 
                     <div class="setting-item toggle-item">
-                        <span>Pass Device Privacy Screen (Local Mode):</span>
+                        <span>Pass-Device Privacy Screen (Local Mode):</span>
                         <input type="checkbox" id="pass-prompt-chk">
                     </div>
 
                     <div class="setting-item toggle-item">
-                        <span>Auto-Rotate Board to Active Player:</span>
+                        <span>Auto-Rotate Board to Active Army:</span>
                         <input type="checkbox" id="rotate-board-chk">
+                    </div>
+
+                    <div class="setting-item">
+                        <label>Display & Ad Preferences:</label>
+                        <small class="help-text">AdMob test banner containers are configured. Upgrade to Grandmaster VIP to permanently disable ad containers.</small>
                     </div>
 
                     <button id="btn-save-settings" class="neon-btn primary-btn submit-btn">Save Preferences</button>
