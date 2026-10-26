@@ -6,6 +6,7 @@
   "scripts": {
     "start": "python backend/run.py",
     "test": "pytest backend/tests",
+    "backup": "python scripts/create_backup.py",
     "cap:sync": "cap sync",
     "cap:open:android": "cap open android",
     "cap:build:android": "cd android && ./gradlew assembleDebug"

@@ -209,3 +209,25 @@ def test_undo_move():
     assert engine.current_turn == PLAYER_CYAN
     assert engine.get_piece(10, 6) is None
     assert engine.get_piece(12, 6).type == 'P'
+
+def test_load_state_roundtrip():
+    engine = FourPlayerChessEngine()
+    # Make a couple moves
+    engine.make_move(Move((12, 6), (10, 6)))
+    engine.make_move(Move((6, 1), (6, 3)))
+
+    saved_state = engine.get_state()
+    assert saved_state["current_turn"] == PLAYER_LIME
+
+    # Restore in new engine instance
+    restored_engine = FourPlayerChessEngine()
+    restored_engine.load_state(saved_state)
+
+    assert restored_engine.current_turn == PLAYER_LIME
+    assert restored_engine.get_piece(10, 6).type == 'P'
+    assert restored_engine.get_piece(10, 6).player == PLAYER_CYAN
+    assert restored_engine.get_piece(6, 3).type == 'P'
+    assert restored_engine.get_piece(6, 3).player == PLAYER_MAGENTA
+    assert restored_engine.last_move.from_sq == (6, 1)
+    assert restored_engine.last_move.to_sq == (6, 3)
+

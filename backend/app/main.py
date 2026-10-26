@@ -69,8 +69,8 @@ def get_or_create_room_runtime(db: Session, room_code: str) -> Optional[Dict[str
     engine = FourPlayerChessEngine()
     if room_record.state_json and room_record.state_json != "{}":
         try:
-            # We can reconstruct or initialize
-            pass
+            saved_state = json.loads(room_record.state_json)
+            engine.load_state(saved_state)
         except Exception as e:
             logger.error(f"Error restoring state for {room_code}: {e}")
 

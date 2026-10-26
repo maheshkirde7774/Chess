@@ -28,6 +28,10 @@ android/captures/
 android/.idea/
 *.iml
 
+# Backups
+backups/
+*.zip
+
 # IDE & OS
 .vscode/
 .idea/

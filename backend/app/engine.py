@@ -837,3 +837,41 @@ class FourPlayerChessEngine:
             "last_move": self.last_move.to_dict() if self.last_move else None,
             "check_status": check_status
         }
+
+    def load_state(self, state: Dict[str, Any]) -> None:
+        """Restores engine state from a serialized dictionary (e.g. from SQLite)."""
+        if not state:
+            return
+
+        board_data = state.get("board", [])
+        for r in range(min(len(board_data), BOARD_SIZE)):
+            for c in range(min(len(board_data[r]), BOARD_SIZE)):
+                sq = board_data[r][c]
+                if sq == "VOID" or sq is None or not is_valid_square(r, c):
+                    self.board[r][c] = None
+                elif isinstance(sq, dict):
+                    self.board[r][c] = Piece.from_dict(sq)
+
+        self.current_turn = state.get("current_turn", PLAYER_CYAN)
+        self.active_players = state.get("active_players", [1, 2, 3, 4])
+        self.eliminated_players = state.get("eliminated_players", [])
+        self.winner = state.get("winner")
+        self.is_game_over = state.get("is_game_over", False)
+        self.turn_number = state.get("turn_number", 1)
+
+        captured = state.get("captured_pieces", {})
+        if isinstance(captured, dict):
+            self.captured_pieces = {int(k): v for k, v in captured.items()}
+        else:
+            self.captured_pieces = {1: [], 2: [], 3: [], 4: []}
+
+        for p in range(1, 5):
+            if p not in self.captured_pieces:
+                self.captured_pieces[p] = []
+
+        last_move_data = state.get("last_move")
+        if last_move_data and isinstance(last_move_data, dict):
+            self.last_move = Move.from_dict(last_move_data)
+        else:
+            self.last_move = None
+
