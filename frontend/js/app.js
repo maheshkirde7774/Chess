@@ -103,12 +103,33 @@ class QuadChessApp {
             this.updateSoundIcon(!isMuted);
         });
 
-        // Quick Play Hero Banner
+        // 7 Home Screen Main Menu Options
+        document.getElementById("menu-item-play-4p")?.addEventListener("click", () => {
+            this.showModal("menu-modal");
+        });
+        document.getElementById("menu-item-classic-1v1")?.addEventListener("click", () => {
+            this.showModal("coming-soon-modal");
+        });
+        document.getElementById("menu-item-friends")?.addEventListener("click", () => {
+            this.showModal("friends-lobby-modal");
+        });
+        document.getElementById("menu-item-ai")?.addEventListener("click", () => {
+            this.showModal("ai-modal");
+        });
+        document.getElementById("menu-item-puzzles")?.addEventListener("click", () => {
+            this.showModal("learn-modal");
+        });
+        document.getElementById("menu-item-profile")?.addEventListener("click", () => {
+            this.switchView("view-profile");
+        });
+        document.getElementById("menu-item-settings")?.addEventListener("click", () => {
+            this.showModal("settings-modal");
+        });
+
+        // Quick Play Hero Banner & Legacy Card Fallbacks
         document.getElementById("btn-quick-play")?.addEventListener("click", () => {
             this.startAIGame("club");
         });
-
-        // Dashboard Mode Cards
         document.getElementById("card-mode-online")?.addEventListener("click", () => {
             this.showModal("menu-modal");
         });
@@ -175,10 +196,14 @@ class QuadChessApp {
         document.getElementById("btn-resign")?.addEventListener("click", () => this.handleResign());
         document.getElementById("btn-rotate")?.addEventListener("click", () => this.ui.manualRotate());
 
-        // Legacy / Modal Mode Buttons
+        // Mode Selection Modal Buttons
         document.getElementById("btn-mode-local")?.addEventListener("click", () => {
             this.hideAllModals();
             this.startLocalGame();
+        });
+        document.getElementById("btn-mode-team-modal")?.addEventListener("click", () => {
+            this.hideAllModals();
+            this.startTeamGame();
         });
         document.getElementById("btn-mode-create")?.addEventListener("click", () => {
             this.hideAllModals();
@@ -187,6 +212,26 @@ class QuadChessApp {
         document.getElementById("btn-mode-join")?.addEventListener("click", () => {
             this.hideAllModals();
             this.showModal("join-room-modal");
+        });
+
+        // Friends Lobby Modal Actions
+        document.getElementById("btn-friends-host")?.addEventListener("click", () => {
+            this.hideAllModals();
+            this.showModal("create-room-modal");
+        });
+        document.getElementById("btn-friends-join")?.addEventListener("click", () => {
+            this.hideAllModals();
+            this.showModal("join-room-modal");
+        });
+
+        // Learn & Puzzles Modal Actions
+        document.getElementById("btn-learn-puzzles")?.addEventListener("click", () => {
+            this.hideAllModals();
+            this.switchView("view-puzzles");
+        });
+        document.getElementById("btn-learn-rules")?.addEventListener("click", () => {
+            this.hideAllModals();
+            this.showModal("rules-modal");
         });
 
         // Friends Screen Actions
@@ -241,7 +286,7 @@ class QuadChessApp {
         });
 
         // Modal Close Buttons
-        document.querySelectorAll(".modal-close-btn").forEach(btn => {
+        document.querySelectorAll(".modal-close-btn, .modal-close-action-btn").forEach(btn => {
             btn.addEventListener("click", () => this.hideAllModals());
         });
 
@@ -743,22 +788,46 @@ class QuadChessApp {
             if (res.ok) {
                 const history = await res.json();
                 this.renderRecentMatches(history);
+                this.updateProfileStats(history);
+            } else {
+                this.renderRecentMatches([]);
+                this.updateProfileStats([]);
             }
         } catch (e) {
-            // Fallback mock history if backend offline
-            this.renderRecentMatches([
-                { room_code: "QUAD88", winner_name: "Cyan (South)", total_moves: 28, completed_at: new Date().toISOString() },
-                { room_code: "TOURN3", winner_name: "Lime (North)", total_moves: 44, completed_at: new Date().toISOString() }
-            ]);
+            // Non-deceptive: show authentic empty state if offline or no recorded matches yet
+            this.renderRecentMatches([]);
+            this.updateProfileStats([]);
         }
+    }
+
+    updateProfileStats(history) {
+        const totalEl = document.getElementById("stat-total-games");
+        const winsEl = document.getElementById("stat-wins");
+        const rateEl = document.getElementById("stat-winrate");
+        const streakEl = document.getElementById("stat-streak");
+
+        const list = Array.isArray(history) ? history : [];
+        const total = list.length;
+        const victories = list.filter(h => h.winner === 1).length;
+        const rate = total > 0 ? Math.round((victories / total) * 100) : 0;
+
+        if (totalEl) totalEl.textContent = total;
+        if (winsEl) winsEl.textContent = victories;
+        if (rateEl) rateEl.textContent = `${rate}%`;
+        if (streakEl) streakEl.textContent = victories > 0 ? "1" : "0";
     }
 
     renderRecentMatches(history) {
         const container = document.getElementById("dash-recent-matches");
         if (!container) return;
 
-        if (!history || history.length === 0) {
-            container.innerHTML = `<div class="match-item"><span style="color:var(--color-text-muted)">No recent matches yet. Start a match!</span></div>`;
+        if (!history || !Array.isArray(history) || history.length === 0) {
+            container.innerHTML = `
+                <div class="empty-history">
+                    <span class="empty-history-icon">♞</span>
+                    <p>No tournament records yet. Launch a 4-player battle to record match statistics.</p>
+                </div>
+            `;
             return;
         }
 
@@ -821,29 +890,13 @@ class QuadChessApp {
             </div>
         `).join("");
 
-        // Also friends list
+        // Companion invites list
         const friendsContainer = document.getElementById("friends-list-container");
         if (friendsContainer) {
             friendsContainer.innerHTML = `
-                <div class="match-item">
-                    <div class="lb-player">
-                        <div class="lb-avatar">H</div>
-                        <div>
-                            <strong>Hikaru_Quad</strong>
-                            <small style="color:var(--color-success)">● Online</small>
-                        </div>
-                    </div>
-                    <button class="mini-action-btn primary" onclick="window.app.showModal('create-room-modal')">Challenge</button>
-                </div>
-                <div class="match-item">
-                    <div class="lb-player">
-                        <div class="lb-avatar">C</div>
-                        <div>
-                            <strong>ChessValkyrie</strong>
-                            <small style="color:var(--color-success)">● In Game</small>
-                        </div>
-                    </div>
-                    <button class="mini-action-btn">Spectate</button>
+                <div class="match-item" style="text-align:center; padding: 20px 12px; border: 1px dashed rgba(255,255,255,0.1); border-radius: 8px;">
+                    <p style="color:var(--color-text-secondary); margin:0 0 10px 0; font-size: 0.88rem;">No companion sessions currently linked.</p>
+                    <button class="mini-action-btn primary" onclick="window.app.showModal('create-room-modal')">Host Arena & Share Code</button>
                 </div>
             `;
         }
