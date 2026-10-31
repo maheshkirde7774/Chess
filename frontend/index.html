@@ -81,7 +81,7 @@
                             </div>
                             <div class="hero-titles">
                                 <h1 class="hero-app-title">NEON FOUR CHESS</h1>
-                                <p class="hero-app-tagline">Four Armies. One Crown. Master the 14×14 Cross Arena.</p>
+                                <p class="hero-app-tagline">Four Armies. One Crown. Conquer the 14×14 Cross Arena.</p>
                             </div>
                         </div>
 
@@ -93,13 +93,17 @@
                                 <div class="pedestal-quadrant-glow north-glow"></div>
                                 <div class="pedestal-quadrant-glow east-glow"></div>
                                 <div class="pedestal-piece-box">
-                                    <svg viewBox="0 0 100 100" class="hero-staunton-piece" xmlns="http://www.w3.org/2000/svg">
+                                    <svg viewBox="0 0 100 100" class="hero-staunton-piece" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Chess King piece">
                                         <defs>
                                             <linearGradient id="heroKingGrad" x1="0%" y1="0%" x2="100%" y2="100%">
                                                 <stop offset="0%" stop-color="#ffffff" stop-opacity="0.95"/>
                                                 <stop offset="50%" stop-color="#cbd5e1" stop-opacity="0.9"/>
                                                 <stop offset="100%" stop-color="#94a3b8" stop-opacity="0.85"/>
                                             </linearGradient>
+                                            <radialGradient id="gemGlow" cx="50%" cy="50%" r="50%">
+                                                <stop offset="0%" stop-color="#38bdf8" stop-opacity="1"/>
+                                                <stop offset="100%" stop-color="#0ea5e9" stop-opacity="0.6"/>
+                                            </radialGradient>
                                             <filter id="heroPieceShadow" x="-15%" y="-15%" width="130%" height="130%">
                                                 <feDropShadow dx="0" dy="3" stdDeviation="3.5" flood-color="#000000" flood-opacity="0.65"/>
                                             </filter>
@@ -110,10 +114,10 @@
                                             <!-- Crown Peak in Gold -->
                                             <circle cx="50" cy="25" r="3.8" fill="#f59e0b"/>
                                             <!-- Imperial Diadem & Arches -->
-                                            <path d="M26 38 C32 30, 42 27, 50 27 C58 27, 68 30, 74 38 C72 52, 75 64, 73 72 L27 72 C25 64, 28 52, 26 38 Z" 
+                                            <path d="M26 38 C32 30, 42 27, 50 27 C58 27, 68 30, 74 38 C72 52, 75 64, 73 72 L27 72 C25 64, 28 52, 26 38 Z"
                                                   fill="url(#heroKingGrad)" stroke="#1e293b" stroke-width="2.5" stroke-linejoin="round"/>
                                             <!-- Player Signature Accent Gem -->
-                                            <polygon points="50,33 55,42 50,51 45,42" fill="#0ea5e9" stroke="#0f172a" stroke-width="1.2"/>
+                                            <polygon points="50,33 55,42 50,51 45,42" fill="url(#gemGlow)" stroke="#0f172a" stroke-width="1.2"/>
                                             <circle cx="50" cy="42" r="2.2" fill="#ffffff" fill-opacity="0.9"/>
                                             <!-- Diadem Filigree with Magenta and Lime Accents -->
                                             <path d="M34 44 C38 41, 44 41, 46 45" stroke="#ec4899" stroke-width="2.2" fill="none" stroke-linecap="round"/>
@@ -206,7 +210,7 @@
                         </button>
 
                         <!-- 4. Play vs AI -->
-                        <button id="menu-item-ai" class="menu-card" type="button">
+                        <button id="menu-item-ai" class="menu-card" type="button" aria-label="Play against AI bots">
                             <div class="card-icon-slot icon-ai">
                                 <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                     <rect x="4" y="4" width="16" height="16" rx="3"/>
@@ -219,15 +223,15 @@
                             <div class="card-content">
                                 <div class="card-header-row">
                                     <span class="card-title">Play vs AI</span>
-                                    <span class="card-badge badge-magenta">OFFLINE BOTS</span>
+                                    <span class="card-badge badge-magenta">3 DIFFICULTIES</span>
                                 </div>
-                                <p class="card-desc">Challenge 3 intelligent heuristic bot commanders (Novice, Club, Master).</p>
+                                <p class="card-desc">Face 3 heuristic bot commanders offline — Novice, Club, or Master difficulty.</p>
                             </div>
                             <div class="card-action-arrow">→</div>
                         </button>
 
                         <!-- 5. Learn & Puzzles -->
-                        <button id="menu-item-puzzles" class="menu-card" type="button">
+                        <button id="menu-item-puzzles" class="menu-card" type="button" aria-label="Learn rules and solve tactical puzzles">
                             <div class="card-icon-slot icon-puzzles">
                                 <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                     <path d="M12 2L2 7l10 5 10-5-10-5z"/>
@@ -572,58 +576,61 @@
                     </div>
 
                     <div class="section-header">
-                        <h3>Army Mastery (By Corner)</h3>
+                        <h3>Army History</h3>
+                        <span class="section-hint">Loaded from server records</span>
                     </div>
 
                     <div class="army-mastery-grid">
-                        <div class="mastery-item player-1">
+                        <div class="mastery-item player-1 is-placeholder">
                             <span class="army-badge">South Cyan</span>
-                            <strong>72% Win Rate</strong>
-                            <small>64 Matches</small>
+                            <strong id="stat-army-1">— Matches</strong>
+                            <small>No data recorded yet</small>
                         </div>
-                        <div class="mastery-item player-2">
+                        <div class="mastery-item player-2 is-placeholder">
                             <span class="army-badge">West Magenta</span>
-                            <strong>65% Win Rate</strong>
-                            <small>26 Matches</small>
+                            <strong id="stat-army-2">— Matches</strong>
+                            <small>No data recorded yet</small>
                         </div>
-                        <div class="mastery-item player-3">
+                        <div class="mastery-item player-3 is-placeholder">
                             <span class="army-badge">North Lime</span>
-                            <strong>67% Win Rate</strong>
-                            <small>24 Matches</small>
+                            <strong id="stat-army-3">— Matches</strong>
+                            <small>No data recorded yet</small>
                         </div>
-                        <div class="mastery-item player-4">
+                        <div class="mastery-item player-4 is-placeholder">
                             <span class="army-badge">East Gold</span>
-                            <strong>61% Win Rate</strong>
-                            <small>14 Matches</small>
+                            <strong id="stat-army-4">— Matches</strong>
+                            <small>No data recorded yet</small>
                         </div>
                     </div>
 
-                    <div class="section-header">
+                    <div class="section-header" style="margin-top: 6px;">
                         <h3>Achievements</h3>
+                        <span class="section-hint">Coming in a future update</span>
                     </div>
 
                     <div class="achievements-list">
-                        <div class="achievement-badge-card unlocked">
-                            <span class="ach-icon">👑</span>
+                        <div class="achievement-badge-card">
+                            <span class="ach-icon" style="opacity:0.4">👑</span>
                             <div class="ach-meta">
-                                <strong>Coronation Master</strong>
-                                <small>Promoted 50 Pawns in tournament play</small>
-                            </div>
-                        </div>
-                        <div class="achievement-badge-card unlocked">
-                            <span class="ach-icon">🛡</span>
-                            <div class="ach-meta">
-                                <strong>Last Stand</strong>
-                                <small>Won a match after being placed in check 5 times</small>
+                                <strong style="color: var(--color-text-muted)">Coronation Master</strong>
+                                <small>Promote 50 Pawns in tournament play</small>
                             </div>
                         </div>
                         <div class="achievement-badge-card">
-                            <span class="ach-icon">⚡</span>
+                            <span class="ach-icon" style="opacity:0.4">🛡</span>
                             <div class="ach-meta">
-                                <strong>Grand Slam</strong>
+                                <strong style="color: var(--color-text-muted)">Last Stand</strong>
+                                <small>Win a match after being placed in check 5 times</small>
+                            </div>
+                        </div>
+                        <div class="achievement-badge-card">
+                            <span class="ach-icon" style="opacity:0.4">⚡</span>
+                            <div class="ach-meta">
+                                <strong style="color: var(--color-text-muted)">Grand Slam</strong>
                                 <small>Checkmate all 3 rival kings in a single match</small>
                             </div>
                         </div>
+                        <p class="placeholder-note" style="text-align:center; margin-top:6px;">Achievement tracking will be enabled in a future update.</p>
                     </div>
                 </div>
             </section>

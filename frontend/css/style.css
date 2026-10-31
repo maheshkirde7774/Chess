@@ -2368,3 +2368,206 @@ html, body {
     .status-badge { font-size: 0.55rem; }
     .modes-grid { grid-template-columns: 1fr; }
 }
+
+/* ==================== PREMIUM HOME SCREEN POLISH ==================== */
+
+/* Hero Card: deeper gradient, subtle border glow */
+.home-hero-card {
+    background: linear-gradient(160deg, #161c28 0%, #0f1117 60%, #0d0e12 100%);
+    border-color: rgba(14, 165, 233, 0.18);
+    box-shadow: 0 0 0 1px rgba(14, 165, 233, 0.06), var(--shadow-lg);
+}
+
+/* Hero King Piece: gentle floating animation */
+@keyframes heroFloat {
+    0%, 100% { transform: translateY(0px) rotate(-1deg); }
+    50%       { transform: translateY(-5px) rotate(1deg); }
+}
+.hero-staunton-piece {
+    animation: heroFloat 4.5s ease-in-out infinite;
+    filter: drop-shadow(0 4px 14px rgba(14, 165, 233, 0.22)) drop-shadow(0 2px 4px rgba(0, 0, 0, 0.7));
+}
+
+/* Pedestal quadrant glows: pulsing */
+@keyframes glowPulse {
+    0%, 100% { opacity: 0.7; transform: scale(1); }
+    50%       { opacity: 1;   transform: scale(1.6); }
+}
+.pedestal-quadrant-glow.south-glow { animation: glowPulse 2.2s ease-in-out infinite; }
+.pedestal-quadrant-glow.west-glow  { animation: glowPulse 2.6s ease-in-out infinite 0.4s; }
+.pedestal-quadrant-glow.north-glow { animation: glowPulse 2.4s ease-in-out infinite 0.8s; }
+.pedestal-quadrant-glow.east-glow  { animation: glowPulse 2.8s ease-in-out infinite 1.2s; }
+
+/* Card Glow Edge: animated highlight bar on the left of primary card */
+.card-glow-edge {
+    position: absolute;
+    left: 0;
+    top: 12%;
+    bottom: 12%;
+    width: 3px;
+    border-radius: 0 2px 2px 0;
+    background: linear-gradient(180deg, var(--color-p1) 0%, var(--color-p2) 50%, var(--color-p1) 100%);
+    background-size: 100% 200%;
+    animation: glowEdgeFlow 3s linear infinite;
+    box-shadow: 0 0 10px var(--color-p1), 0 0 20px rgba(14, 165, 233, 0.4);
+}
+@keyframes glowEdgeFlow {
+    0%   { background-position: 0% 0%; box-shadow: 0 0 10px var(--color-p1), 0 0 20px rgba(14,165,233,0.4); }
+    50%  { background-position: 0% 100%; box-shadow: 0 0 10px var(--color-p2), 0 0 20px rgba(236,72,153,0.4); }
+    100% { background-position: 0% 200%; box-shadow: 0 0 10px var(--color-p1), 0 0 20px rgba(14,165,233,0.4); }
+}
+
+/* Primary Menu Card: pulsing ambient glow */
+@keyframes primaryCardPulse {
+    0%, 100% { box-shadow: 0 4px 18px rgba(14, 165, 233, 0.12), 0 0 0 1px rgba(14, 165, 233, 0.2); }
+    50%       { box-shadow: 0 4px 28px rgba(14, 165, 233, 0.25), 0 0 0 1px rgba(14, 165, 233, 0.4); }
+}
+.menu-card-primary {
+    animation: primaryCardPulse 3.5s ease-in-out infinite;
+}
+.menu-card-primary:hover {
+    animation: none;
+    box-shadow: 0 6px 32px rgba(14, 165, 233, 0.38);
+}
+
+/* Coming-Soon Card: subdued, no animation */
+.menu-card-soon {
+    cursor: default;
+    pointer-events: auto; /* allow click for "coming soon" modal */
+}
+.menu-card-soon:hover {
+    transform: none;
+    box-shadow: none;
+}
+
+/* Menu Grid: staggered entrance on view-home becoming active */
+@keyframes cardFadeSlide {
+    from { opacity: 0; transform: translateY(14px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+#view-home.active-view .menu-card {
+    animation: cardFadeSlide 0.38s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+#view-home.active-view .main-menu-grid .menu-card:nth-child(1) { animation-delay: 0.06s; }
+#view-home.active-view .main-menu-grid .menu-card:nth-child(2) { animation-delay: 0.12s; }
+#view-home.active-view .main-menu-grid .menu-card:nth-child(3) { animation-delay: 0.18s; }
+#view-home.active-view .main-menu-grid .menu-card:nth-child(4) { animation-delay: 0.24s; }
+#view-home.active-view .main-menu-grid .menu-card:nth-child(5) { animation-delay: 0.30s; }
+#view-home.active-view .main-menu-grid .menu-card:nth-child(6) { animation-delay: 0.36s; }
+#view-home.active-view .main-menu-grid .menu-card:nth-child(7) { animation-delay: 0.42s; }
+
+/* Hero brand row entrance */
+@keyframes heroEntrance {
+    from { opacity: 0; transform: translateY(-10px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+#view-home.active-view .home-hero-card {
+    animation: heroEntrance 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Section headers */
+.section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 2px;
+}
+.section-header h3 {
+    font-family: var(--font-heading);
+    font-size: 0.88rem;
+    font-weight: 700;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    color: var(--color-text-secondary);
+    margin: 0;
+}
+.section-hint {
+    font-size: 0.72rem;
+    color: var(--color-text-muted);
+    font-weight: 500;
+}
+
+/* Empty history icon */
+.empty-history {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+}
+.empty-history-icon {
+    font-size: 2rem;
+    opacity: 0.35;
+    display: block;
+    margin-bottom: 2px;
+}
+
+/* Profile: placeholder badges for static data */
+.placeholder-note {
+    font-size: 0.7rem;
+    color: var(--color-text-disabled);
+    font-style: italic;
+    margin-top: 2px;
+}
+
+/* Army mastery: dim static placeholder data */
+.mastery-item.is-placeholder {
+    opacity: 0.45;
+    position: relative;
+}
+.mastery-item.is-placeholder::after {
+    content: 'Estimated · No real data yet';
+    position: absolute;
+    bottom: -16px;
+    left: 0;
+    font-size: 0.6rem;
+    color: var(--color-text-disabled);
+    white-space: nowrap;
+}
+
+/* Crest facets: subtle animated glow on home hero */
+@keyframes facetGlow {
+    0%, 100% { opacity: 0.85; }
+    50%       { opacity: 1; box-shadow: 0 0 12px currentColor; }
+}
+.hero-crest .crest-facet.p1 { animation: facetGlow 3s ease-in-out infinite; }
+.hero-crest .crest-facet.p2 { animation: facetGlow 3s ease-in-out infinite 0.75s; }
+.hero-crest .crest-facet.p3 { animation: facetGlow 3s ease-in-out infinite 1.5s; }
+.hero-crest .crest-facet.p4 { animation: facetGlow 3s ease-in-out infinite 2.25s; }
+
+/* Focus-visible ring for touch-friendly accessibility */
+.menu-card:focus-visible,
+.neon-btn:focus-visible,
+button:focus-visible {
+    outline: 2px solid var(--color-p1);
+    outline-offset: 3px;
+}
+
+/* Arena tag chips: subtler, more refined */
+.arena-tag-chip {
+    transition: background var(--transition-fast), color var(--transition-fast);
+}
+.arena-tag-chip:hover {
+    background: rgba(255, 255, 255, 0.07);
+    color: var(--color-text-primary);
+}
+
+/* Touch-friendly minimum tap target on mobile */
+@media (max-width: 768px) {
+    .menu-card { min-height: 72px; }
+    .home-scrollable { gap: 12px; padding: 12px; padding-bottom: 90px; }
+    .home-hero-card { padding: 18px 16px; }
+    .main-menu-grid { grid-template-columns: 1fr; }
+    .hero-app-title { font-size: clamp(1.25rem, 5vw, 1.6rem); }
+    .pedestal-stage { width: 64px; height: 64px; }
+    .hero-showcase-panel { padding: 12px 14px; }
+}
+
+/* Desktop: two-column menu grid */
+@media (min-width: 768px) {
+    .main-menu-grid { grid-template-columns: repeat(2, 1fr); }
+    .menu-card-primary { grid-column: 1 / -1; }
+    .home-scrollable { padding: 20px 24px; padding-bottom: 90px; }
+}
+@media (min-width: 1024px) {
+    .home-scrollable { padding: 24px 32px; padding-bottom: 32px; }
+}
