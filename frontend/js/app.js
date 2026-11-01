@@ -27,6 +27,7 @@ class QuadChessApp {
 
         this.ui = new window.ChessUI(this.engine, (move, isCapture) => this.onPlayerMove(move, isCapture));
         this.classicChess = new window.ClassicChessUI(this);
+        this.dailyPuzzles = new window.DailyPuzzleUI(this);
 
         this.currentView = "view-home";
         this.initEventListeners();
@@ -46,6 +47,7 @@ class QuadChessApp {
             targetView.classList.add("active-view");
             this.currentView = viewId;
         }
+        if (viewId === "view-puzzles") this.dailyPuzzles?.onViewEntered();
 
         // Update Bottom Nav active state
         document.querySelectorAll(".nav-tab-btn").forEach(btn => {
@@ -150,7 +152,7 @@ class QuadChessApp {
 
         // Daily Puzzle Button
         document.getElementById("btn-start-daily-puzzle")?.addEventListener("click", () => {
-            this.startPuzzle(window.PUZZLES_DATA[0]);
+            this.switchView("view-puzzles");
         });
 
         // AI Modal Diff Buttons

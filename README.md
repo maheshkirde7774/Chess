@@ -31,7 +31,7 @@
 | **🤝 2v2 Team Alliance** | Team combat format: South (Cyan) & North (Lime) alliance battle West (Magenta) & East (Gold) with joint checkmate objectives. |
 | **🌐 Online Multiplayer** | Private or public Classic 1v1 and four-player rooms, secure six-character invitation codes, ready/presence lobbies, host-controlled start, server-validated actions, and WebSocket reconnection. |
 | **📱 Local Pass & Play** | Couch multiplayer on a single device with turn-privacy screens, auto-board rotation, and move undo. |
-| **🧩 Tactical Daily Puzzles** | Multi-army chess puzzles with rating tracking, fork attacks, queen diversion sacrifices, and solution verifier. |
+| **🧩 Daily Classic Puzzles** | A real Lichess daily puzzle, server-validated legal solution, progressive hints, difficulty-based XP, timezone-aware streaks, and an archive. Four-Player puzzles are marked as future work until they can be authoritatively validated. |
 | **🏆 Global Leaderboards** | Competitive Elo rankings, win-rate metrics, leagues (Diamond & Master), and player profile statistics. |
 | **🔊 Acoustic Chess Audio** | Authentic acoustic wood piece impacts, double capture knocks, harmonic check chimes, and tournament victory fanfares synthesized in Web Audio. |
 | **💳 Grandmaster VIP & Themes** | Board finish customizer (Tournament Slate, Walnut Wood, Obsidian Carbon, Carrara Marble) and reserved clean AdMob banner container. |
@@ -212,9 +212,17 @@ Both online modes provide a waiting lobby with room code copy/share, occupied an
 
 The Profile screen creates a device-scoped profile automatically. Its opaque bearer credential is stored in this browser's local storage and is returned only during profile creation; it is not a password account and cannot be recovered or transferred to another device. Users can choose a preset avatar and edit a unique 3–20 character username. Match attribution uses the profile credential at room creation/join, while game actions continue to require the existing room player credential.
 
-Only server-completed matches are recorded. Abandoned/waiting games, local pass-and-play, and client-side bot/puzzle games do not change a profile because their outcomes are not server-verified. A completed match awards 10 XP, plus 15 XP for a win or 5 XP for a draw. Level 1 requires 100 XP, with each subsequent level requiring 100 more XP than the prior level. Classic AI matches award XP and count in stats/history but are unrated. Classic online rating uses Elo (initial rating 1200, K=32); draw scores are 0.5. Four-Player online rating starts at 1200 and uses a documented multiplayer Elo variant (K=24 against the average opponents' rating; the winner scores 1, each other player 0, and a draw gives each 0.5). Ratings update only when every participant in that online match is linked to a different profile; the two modes have separate rating histories.
+Only server-completed matches are recorded. Abandoned/waiting games and local pass-and-play do not change a profile because their outcomes are not server-verified. A completed match awards 10 XP, plus 15 XP for a win or 5 XP for a draw. Level 1 requires 100 XP, with each subsequent level requiring 100 more XP than the prior level. A completed Classic daily puzzle also awards server-calculated XP. Classic AI matches award XP and count in stats/history but are unrated. Classic online rating uses Elo (initial rating 1200, K=32); draw scores are 0.5. Four-Player online rating starts at 1200 and uses a documented multiplayer Elo variant (K=24 against the average opponents' rating; the winner scores 1, each other player 0, and a draw gives each 0.5). Ratings update only when every participant in that online match is linked to a different profile; the two modes have separate rating histories.
 
 Achievements are based on persisted match outcomes: First Victory, 10 Games Played, 10 Wins, a five-win streak, a Four-Player win, Classic Chess rating of 2000, and a Classic comeback win after trailing by at least three points of material during the game. Existing matches from before profile tracking are retained but are not attributed retroactively. Device-local pass-and-play is not counted because it has no distinct authenticated player identities.
+
+### Daily Classic puzzles
+
+The daily Classic puzzle is fetched from the Lichess daily puzzle API and stored locally the first time FOURX serves that UTC publication date. FOURX verifies the FEN and every solution move using `python-chess` before saving it; the private solution is never sent before completion. If Lichess is unavailable for a new publication, the API reports an error instead of presenting an unverified fallback. The archive begins with puzzles FOURX has fetched and does not backfill older daily entries.
+
+Puzzle rating maps to Easy (<1200), Medium (1200–1599), Hard (1600–1999), and Expert (2000+). Verified completion awards 10/15/20/25 XP respectively, with a 5 XP bonus when there were no incorrect moves. Hints and resets do not erase incorrect-move history. Puzzle accuracy is the percentage of started daily puzzles solved without an incorrect move. Current streak advances only for a successful challenge on the next local calendar date; a missed date resets it. Profile timezone is an IANA timezone detected from the device and can be changed before the first daily attempt; the server clock determines dates, and timezone changes are locked once an attempt begins. Archive practice validates the same server-held solution but never awards XP or affects streaks.
+
+Four-Player tactical puzzles are not enabled as a feature because their current client-side single-move check is not an authoritative complete-solution validator.
 
 ---
 
@@ -276,6 +284,13 @@ cd android
 | `GET` | `/api/profile` | Read the authenticated profile, ratings, stats, level, and achievements |
 | `PATCH` | `/api/profile` | Update the authenticated profile username or preset avatar |
 | `GET` | `/api/profile/matches` | Read authenticated match history; optional `game_mode` and `result` filters |
+| `GET` | `/api/puzzles/daily` | Get today's authenticated, timezone-assigned Classic puzzle without its solution |
+| `POST` | `/api/puzzles/daily/move` | Submit a UCI move for server-side legality and solution verification |
+| `POST` | `/api/puzzles/daily/hint` | Get a progressive hint without exposing the solution |
+| `POST` | `/api/puzzles/daily/reset` | Reset the visible position while preserving attempt history |
+| `GET` | `/api/puzzles/archive` | List stored daily puzzles; optional `difficulty`, `offset`, and `limit` |
+| `GET` | `/api/puzzles/archive/{puzzle_id}` | Load a past puzzle for practice without its solution |
+| `POST` | `/api/puzzles/archive/{puzzle_id}/move` | Verify archive practice moves; practice has no rewards |
 | `GET` | `/api/leaderboard?game_mode=four_player&category=rating&period=all_time` | Public paginated leaderboard; supports `game_mode` (`classic`, `four_player`, `all`), `category` (`rating`, `wins`, `streak`, `xp`, `weekly`, `monthly`), `period`, `search`, `offset`, and `limit`; optional profile bearer auth adds the current player's rank and nearby players |
 | `GET` | `/api/players/{username}` | Public profile fields and recent verified matches; excludes suspended/deleted profiles |
 | `POST` | `/classic/rooms` | Create a local or online classic 1v1 match |

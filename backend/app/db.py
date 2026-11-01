@@ -82,6 +82,7 @@ class PlayerProfileModel(Base):
     best_streak = Column(Integer, default=0, nullable=False)
     is_suspended = Column(Boolean, default=False, nullable=False)
     deleted_at = Column(DateTime, nullable=True)
+    timezone = Column(String(64), nullable=True)
 
 
 class MatchRecordModel(Base):
@@ -117,6 +118,67 @@ class PlayerMatchModel(Base):
     rating_delta = Column(Integer, default=0, nullable=False)
     xp_awarded = Column(Integer, default=0, nullable=False)
     created_at = Column(DateTime, default=get_utc_now, nullable=False)
+
+
+class DailyPuzzleModel(Base):
+    __tablename__ = "daily_puzzles"
+
+    puzzle_id = Column(String(32), primary_key=True)
+    source_date = Column(String(10), unique=True, index=True, nullable=False)
+    rating = Column(Integer, nullable=False)
+    fen = Column(Text, nullable=False)
+    solution_json = Column(Text, nullable=False)
+    themes_json = Column(Text, nullable=False, default="[]")
+    game_id = Column(String(32), nullable=False)
+    pgn = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=get_utc_now, nullable=False)
+
+
+class PlayerDailyPuzzleModel(Base):
+    __tablename__ = "player_daily_puzzles"
+    __table_args__ = (
+        UniqueConstraint("profile_id", "local_date", name="uq_profile_daily_puzzle_date"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    profile_id = Column(String(36), index=True, nullable=False)
+    local_date = Column(String(10), nullable=False)
+    puzzle_id = Column(String(32), index=True, nullable=False)
+    created_at = Column(DateTime, default=get_utc_now, nullable=False)
+
+
+class PlayerPuzzleAttemptModel(Base):
+    __tablename__ = "player_puzzle_attempts"
+    __table_args__ = (
+        UniqueConstraint("profile_id", "local_date", name="uq_puzzle_attempt_profile_date"),
+        UniqueConstraint("profile_id", "puzzle_id", name="uq_puzzle_attempt_profile_puzzle"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    profile_id = Column(String(36), index=True, nullable=False)
+    puzzle_id = Column(String(32), nullable=False)
+    local_date = Column(String(10), nullable=False)
+    moves_json = Column(Text, nullable=False, default="[]")
+    incorrect_attempts = Column(Integer, default=0, nullable=False)
+    hint_count = Column(Integer, default=0, nullable=False)
+    completed = Column(Boolean, default=False, nullable=False)
+    first_attempt_correct = Column(Boolean, default=False, nullable=False)
+    xp_awarded = Column(Integer, default=0, nullable=False)
+    started_at = Column(DateTime, default=get_utc_now, nullable=False)
+    completed_at = Column(DateTime, nullable=True)
+
+
+class PlayerPuzzleProgressModel(Base):
+    __tablename__ = "player_puzzle_progress"
+
+    profile_id = Column(String(36), primary_key=True)
+    current_streak = Column(Integer, default=0, nullable=False)
+    best_streak = Column(Integer, default=0, nullable=False)
+    total_attempted = Column(Integer, default=0, nullable=False)
+    total_completed = Column(Integer, default=0, nullable=False)
+    first_attempt_correct = Column(Integer, default=0, nullable=False)
+    total_xp_earned = Column(Integer, default=0, nullable=False)
+    last_completed_date = Column(String(10), nullable=True)
 
 
 class ProfileAchievementModel(Base):
@@ -171,6 +233,9 @@ def init_db():
     if "deleted_at" not in profile_columns:
         with engine.begin() as connection:
             connection.execute(text("ALTER TABLE player_profiles ADD COLUMN deleted_at DATETIME"))
+    if "timezone" not in profile_columns:
+        with engine.begin() as connection:
+            connection.execute(text("ALTER TABLE player_profiles ADD COLUMN timezone VARCHAR(64)"))
     for index in MatchRecordModel.__table__.indexes:
         index.create(bind=engine, checkfirst=True)
 

@@ -29,6 +29,14 @@ class FOURXProfile {
         if (this.token) {
             try {
                 this.profile = await this.request("/api/profile");
+                if (!this.profile.timezone) {
+                    this.profile = await this.request("/api/profile", {
+                        method: "PATCH",
+                        body: JSON.stringify({
+                            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+                        }),
+                    });
+                }
                 return this.profile;
             } catch (error) {
                 if (!/credential/i.test(error.message) && !/401/.test(error.message)) throw error;
@@ -36,7 +44,11 @@ class FOURXProfile {
                 this.token = null;
             }
         }
-        const created = await this.request("/api/profile", { method: "POST", body: "{}" });
+        const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+        const created = await this.request("/api/profile", {
+            method: "POST",
+            body: JSON.stringify({ timezone }),
+        });
         this.token = created.access_token;
         this.profile = created.profile;
         localStorage.setItem(this.tokenKey, this.token);

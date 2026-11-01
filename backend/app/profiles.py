@@ -7,20 +7,27 @@ import secrets
 import threading
 import time
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Optional
+from urllib.error import URLError
+from urllib.request import Request as URLRequest, urlopen
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import chess
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
-from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import case, func
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+from sqlalchemy import case, func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.db import (
+    DailyPuzzleModel,
     MatchRecordModel,
+    PlayerDailyPuzzleModel,
     PlayerMatchModel,
     PlayerProfileModel,
+    PlayerPuzzleAttemptModel,
+    PlayerPuzzleProgressModel,
     ProfileAchievementModel,
     get_db,
 )
@@ -46,6 +53,50 @@ class ProfileUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
     username: Optional[str] = Field(default=None, min_length=3, max_length=20)
     avatar: Optional[str] = Field(default=None, max_length=16)
+    timezone: Optional[str] = Field(default=None, max_length=64)
+
+    @field_validator("timezone")
+    @classmethod
+    def validate_timezone(cls, value: Optional[str]) -> Optional[str]:
+        if value is not None:
+            _timezone_for(value)
+        return value
+
+
+class ProfileCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    timezone: Optional[str] = Field(default=None, max_length=64)
+
+    @field_validator("timezone")
+    @classmethod
+    def validate_timezone(cls, value: Optional[str]) -> Optional[str]:
+        if value is not None:
+            _timezone_for(value)
+        return value
+
+
+class PuzzleMove(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    puzzle_id: str = Field(min_length=3, max_length=32)
+    move: str = Field(pattern=r"^[a-h][1-8][a-h][1-8][qrbn]?$")
+
+
+class PuzzleReset(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    puzzle_id: str = Field(min_length=3, max_length=32)
+
+
+class PracticePuzzleMove(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    move: str = Field(pattern=r"^[a-h][1-8][a-h][1-8][qrbn]?$")
+    moves: list[str] = Field(default_factory=list, max_length=80)
+
+
+def _timezone_for(value: str) -> ZoneInfo:
+    try:
+        return ZoneInfo(value)
+    except (ZoneInfoNotFoundError, ValueError) as error:
+        raise ValueError("Timezone must be a valid IANA timezone") from error
 
 
 def _token_hash(token: str) -> str:
@@ -114,6 +165,7 @@ def _profile_payload(db: Session, profile: PlayerProfileModel) -> dict[str, Any]
         "id": profile.id,
         "username": profile.username,
         "avatar": profile.avatar,
+        "timezone": profile.timezone,
         "joined_at": profile.created_at.isoformat() if profile.created_at else None,
         **_level_progress(profile.xp),
         "ratings": {
@@ -136,6 +188,7 @@ def _profile_payload(db: Session, profile: PlayerProfileModel) -> dict[str, Any]
 @router.post("/api/profile")
 def create_device_profile(
     request: Request,
+    create: ProfileCreate,
     db: Session = Depends(get_db),
 ):
     """Creates an anonymous device profile; its bearer secret is returned only once."""
@@ -153,6 +206,7 @@ def create_device_profile(
         xp=0,
         classic_rating=1200,
         four_player_rating=1200,
+        timezone=create.timezone,
     )
     db.add(profile)
     try:
@@ -180,8 +234,8 @@ def update_profile(
     db: Session = Depends(get_db),
 ):
     profile = _authenticated_profile(authorization, db)
-    if update.username is None and update.avatar is None:
-        raise HTTPException(status_code=422, detail="Provide a username or avatar to update")
+    if update.username is None and update.avatar is None and update.timezone is None:
+        raise HTTPException(status_code=422, detail="Provide a username, avatar, or timezone to update")
     if update.username is not None:
         username = update.username.strip()
         if not re.fullmatch(r"[A-Za-z0-9_]{3,20}", username):
@@ -199,6 +253,15 @@ def update_profile(
         if update.avatar not in AVATARS:
             raise HTTPException(status_code=422, detail="Select an available avatar")
         profile.avatar = update.avatar
+    if update.timezone is not None and update.timezone != (profile.timezone or "UTC"):
+        if db.query(PlayerPuzzleAttemptModel.id).filter(
+            PlayerPuzzleAttemptModel.profile_id == profile.id
+        ).first():
+            raise HTTPException(
+                status_code=409,
+                detail="Timezone cannot change after a daily puzzle attempt has started",
+            )
+        profile.timezone = update.timezone
     try:
         db.commit()
     except IntegrityError:
@@ -245,6 +308,686 @@ def profile_matches(
         }
         for player_match, match in rows
     ]
+
+
+def _fetch_lichess_daily() -> dict[str, Any]:
+    request = URLRequest(
+        "https://lichess.org/api/puzzle/daily",
+        headers={"Accept": "application/json", "User-Agent": "FOURX-Daily-Puzzles/1.0"},
+    )
+    try:
+        with urlopen(request, timeout=8) as response:
+            data = json.loads(response.read().decode("utf-8"))
+    except (URLError, TimeoutError, json.JSONDecodeError, UnicodeDecodeError) as error:
+        raise HTTPException(
+            status_code=503,
+            detail="Daily puzzle source is temporarily unavailable; please retry",
+        ) from error
+    if not isinstance(data, dict):
+        raise HTTPException(status_code=502, detail="Puzzle source returned invalid data")
+    return data
+
+
+def _puzzle_difficulty(rating: int) -> str:
+    if rating < 1200:
+        return "easy"
+    if rating < 1600:
+        return "medium"
+    if rating < 2000:
+        return "hard"
+    return "expert"
+
+
+def _puzzle_objective(themes: list[str]) -> str:
+    mate_theme = next((theme for theme in themes if re.fullmatch(r"mateIn[1-9]", theme)), None)
+    if mate_theme:
+        return f"Find the forced checkmate in {mate_theme[6:]}."
+    if "crushing" in themes:
+        return "Find the forcing continuation that wins decisive material."
+    return "Find the strongest forcing continuation."
+
+
+def _load_daily_puzzle(db: Session, utc_date: str) -> DailyPuzzleModel:
+    saved = db.query(DailyPuzzleModel).filter(
+        DailyPuzzleModel.source_date == utc_date
+    ).first()
+    if saved:
+        return saved
+
+    data = _fetch_lichess_daily()
+    puzzle_data = data.get("puzzle")
+    game_data = data.get("game")
+    if not isinstance(puzzle_data, dict) or not isinstance(game_data, dict):
+        raise HTTPException(status_code=502, detail="Puzzle source returned an incomplete puzzle")
+    puzzle_id = puzzle_data.get("id")
+    fen = puzzle_data.get("fen")
+    solution = puzzle_data.get("solution")
+    rating = puzzle_data.get("rating")
+    game_id = game_data.get("id")
+    pgn = game_data.get("pgn")
+    themes = puzzle_data.get("themes", [])
+    if (
+        not isinstance(puzzle_id, str)
+        or not re.fullmatch(r"[A-Za-z0-9_-]{3,32}", puzzle_id)
+        or not isinstance(fen, str)
+        or not isinstance(solution, list)
+        or not solution
+        or len(solution) > 80
+        or not isinstance(rating, int)
+        or not isinstance(game_id, str)
+        or not isinstance(pgn, str)
+        or not isinstance(themes, list)
+        or any(not isinstance(theme, str) for theme in themes)
+    ):
+        raise HTTPException(status_code=502, detail="Puzzle source returned invalid fields")
+    try:
+        board = chess.Board(fen)
+    except ValueError as error:
+        raise HTTPException(status_code=502, detail="Puzzle source returned an invalid position") from error
+    if not board.is_valid():
+        raise HTTPException(status_code=502, detail="Puzzle source returned an invalid position")
+    normalized_solution: list[str] = []
+    for uci in solution:
+        if not isinstance(uci, str):
+            raise HTTPException(status_code=502, detail="Puzzle source returned an invalid solution")
+        try:
+            move = chess.Move.from_uci(uci)
+        except ValueError as error:
+            raise HTTPException(status_code=502, detail="Puzzle source returned an invalid solution") from error
+        if move not in board.legal_moves:
+            raise HTTPException(status_code=502, detail="Puzzle source returned an illegal solution")
+        normalized_solution.append(move.uci())
+        board.push(move)
+
+    saved = DailyPuzzleModel(
+        puzzle_id=puzzle_id,
+        source_date=utc_date,
+        rating=rating,
+        fen=fen,
+        solution_json=json.dumps([normalized_solution]),
+        themes_json=json.dumps(themes),
+        game_id=game_id,
+        pgn=pgn,
+    )
+    db.add(saved)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        saved = db.query(DailyPuzzleModel).filter(
+            DailyPuzzleModel.source_date == utc_date
+        ).first()
+        if saved is None:
+            raise HTTPException(status_code=503, detail="Daily puzzle could not be saved; please retry")
+    return saved
+
+
+def _daily_assignment(
+    db: Session,
+    profile: PlayerProfileModel,
+) -> tuple[PlayerDailyPuzzleModel, DailyPuzzleModel, str]:
+    now = datetime.now(timezone.utc)
+    local_date = _local_puzzle_date(profile, now)
+    assignment = db.query(PlayerDailyPuzzleModel).filter(
+        PlayerDailyPuzzleModel.profile_id == profile.id,
+        PlayerDailyPuzzleModel.local_date == local_date,
+    ).first()
+    if assignment is not None:
+        puzzle = db.query(DailyPuzzleModel).filter(
+            DailyPuzzleModel.puzzle_id == assignment.puzzle_id
+        ).first()
+        if puzzle is None:
+            raise HTTPException(status_code=500, detail="Assigned daily puzzle is unavailable")
+        return assignment, puzzle, local_date
+
+    puzzle = _load_daily_puzzle(db, now.date().isoformat())
+    already_attempted = db.query(PlayerPuzzleAttemptModel.id).filter(
+        PlayerPuzzleAttemptModel.profile_id == profile.id,
+        PlayerPuzzleAttemptModel.puzzle_id == puzzle.puzzle_id,
+    ).first()
+    if already_attempted:
+        attempted_puzzles = {
+            row[0] for row in db.query(PlayerPuzzleAttemptModel.puzzle_id).filter(
+                PlayerPuzzleAttemptModel.profile_id == profile.id,
+            ).all()
+        }
+        puzzle = db.query(DailyPuzzleModel).filter(
+            DailyPuzzleModel.puzzle_id.notin_(attempted_puzzles | {puzzle.puzzle_id}),
+        ).order_by(DailyPuzzleModel.source_date.desc()).first()
+        if puzzle is None:
+            raise HTTPException(
+                status_code=503,
+                detail="A new daily puzzle is not available yet in your timezone",
+            )
+    assignment = PlayerDailyPuzzleModel(
+        profile_id=profile.id,
+        local_date=local_date,
+        puzzle_id=puzzle.puzzle_id,
+    )
+    db.add(assignment)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        assignment = db.query(PlayerDailyPuzzleModel).filter(
+            PlayerDailyPuzzleModel.profile_id == profile.id,
+            PlayerDailyPuzzleModel.local_date == local_date,
+        ).first()
+        if assignment is None:
+            raise HTTPException(status_code=409, detail="Daily puzzle assignment changed; reload and retry")
+        puzzle = db.query(DailyPuzzleModel).filter(
+            DailyPuzzleModel.puzzle_id == assignment.puzzle_id
+        ).first()
+        if puzzle is None:
+            raise HTTPException(status_code=500, detail="Assigned daily puzzle is unavailable")
+        return assignment, puzzle, local_date
+    return assignment, puzzle, local_date
+
+
+def _local_puzzle_date(profile: PlayerProfileModel, now: datetime) -> str:
+    return now.astimezone(_timezone_for(profile.timezone or "UTC")).date().isoformat()
+
+
+def _next_puzzle_streak(
+    current: int,
+    best: int,
+    last_completed: Optional[str],
+    local_date: str,
+) -> tuple[int, int]:
+    today = date.fromisoformat(local_date)
+    last_date = date.fromisoformat(last_completed) if last_completed else None
+    next_current = current + 1 if last_date == today - timedelta(days=1) else 1
+    return next_current, max(best, next_current)
+
+
+def _puzzle_progress(db: Session, profile_id: str) -> dict[str, int]:
+    progress = db.query(PlayerPuzzleProgressModel).filter(
+        PlayerPuzzleProgressModel.profile_id == profile_id
+    ).first()
+    if progress is None:
+        return {
+            "current_streak": 0,
+            "best_streak": 0,
+            "total_attempted": 0,
+            "total_completed": 0,
+            "first_attempt_correct": 0,
+            "accuracy": 0,
+            "total_xp_earned": 0,
+        }
+    return {
+        "current_streak": progress.current_streak,
+        "best_streak": progress.best_streak,
+        "total_attempted": progress.total_attempted,
+        "total_completed": progress.total_completed,
+        "first_attempt_correct": progress.first_attempt_correct,
+        "accuracy": round(
+            progress.first_attempt_correct * 100 / progress.total_attempted,
+            1,
+        ) if progress.total_attempted else 0,
+        "total_xp_earned": progress.total_xp_earned,
+    }
+
+
+def _attempt_payload(attempt: Optional[PlayerPuzzleAttemptModel]) -> dict[str, Any]:
+    if attempt is None:
+        return {
+            "moves": [],
+            "incorrect_attempts": 0,
+            "hint_count": 0,
+            "completed": False,
+            "first_attempt_correct": False,
+            "xp_awarded": 0,
+        }
+    return {
+        "moves": json.loads(attempt.moves_json),
+        "incorrect_attempts": attempt.incorrect_attempts,
+        "hint_count": attempt.hint_count,
+        "completed": attempt.completed,
+        "first_attempt_correct": attempt.first_attempt_correct,
+        "xp_awarded": attempt.xp_awarded,
+    }
+
+
+def _puzzle_explanation(puzzle: DailyPuzzleModel) -> str:
+    line = json.loads(puzzle.solution_json)[0]
+    board = chess.Board(puzzle.fen)
+    notation = []
+    for uci in line:
+        move = chess.Move.from_uci(uci)
+        notation.append(board.san(move))
+        board.push(move)
+    return (
+        f"The verified solution is {', '.join(notation)}. "
+        "This is the best continuation from the position in the source game."
+    )
+
+
+def _public_puzzle_payload(
+    puzzle: DailyPuzzleModel,
+    *,
+    local_date: Optional[str] = None,
+    attempt: Optional[PlayerPuzzleAttemptModel] = None,
+) -> dict[str, Any]:
+    themes = json.loads(puzzle.themes_json)
+    result = {
+        "puzzle_id": puzzle.puzzle_id,
+        "published_date": puzzle.source_date,
+        "challenge_date": local_date or puzzle.source_date,
+        "fen": puzzle.fen,
+        "rating": puzzle.rating,
+        "difficulty": _puzzle_difficulty(puzzle.rating),
+        "objective": _puzzle_objective(themes),
+        "themes": themes,
+        "source": "Lichess Daily Puzzle",
+        "source_url": f"https://lichess.org/training/{puzzle.puzzle_id}",
+        "attempt": _attempt_payload(attempt),
+    }
+    if attempt and attempt.completed:
+        result["explanation"] = _puzzle_explanation(puzzle)
+    return result
+
+
+def _get_or_create_daily_attempt(
+    db: Session,
+    profile_id: str,
+    puzzle_id: str,
+    local_date: str,
+) -> PlayerPuzzleAttemptModel:
+    attempt = db.query(PlayerPuzzleAttemptModel).filter(
+        PlayerPuzzleAttemptModel.profile_id == profile_id,
+        PlayerPuzzleAttemptModel.local_date == local_date,
+    ).first()
+    if attempt:
+        if attempt.puzzle_id != puzzle_id:
+            raise HTTPException(status_code=409, detail="Today's daily puzzle has already been started")
+        if attempt.completed:
+            raise HTTPException(status_code=409, detail="Today's daily puzzle is already complete")
+        return attempt
+    previously_attempted = db.query(PlayerPuzzleAttemptModel.id).filter(
+        PlayerPuzzleAttemptModel.profile_id == profile_id,
+        PlayerPuzzleAttemptModel.puzzle_id == puzzle_id,
+    ).first()
+    if previously_attempted:
+        raise HTTPException(status_code=409, detail="This puzzle has already been attempted")
+    attempt = PlayerPuzzleAttemptModel(
+        profile_id=profile_id,
+        puzzle_id=puzzle_id,
+        local_date=local_date,
+        moves_json="[]",
+    )
+    progress = db.query(PlayerPuzzleProgressModel).filter(
+        PlayerPuzzleProgressModel.profile_id == profile_id
+    ).first()
+    if progress is None:
+        progress = PlayerPuzzleProgressModel(
+            profile_id=profile_id,
+            current_streak=0,
+            best_streak=0,
+            total_attempted=0,
+            total_completed=0,
+            first_attempt_correct=0,
+            total_xp_earned=0,
+        )
+        db.add(progress)
+    progress.total_attempted += 1
+    db.add(attempt)
+    try:
+        db.flush()
+    except IntegrityError:
+        db.rollback()
+        existing = db.query(PlayerPuzzleAttemptModel).filter(
+            PlayerPuzzleAttemptModel.profile_id == profile_id,
+            PlayerPuzzleAttemptModel.local_date == local_date,
+        ).first()
+        if existing is None or existing.puzzle_id != puzzle_id:
+            raise HTTPException(status_code=409, detail="A daily puzzle attempt already exists")
+        if existing.completed:
+            raise HTTPException(status_code=409, detail="Today's daily puzzle is already complete")
+        return existing
+    return attempt
+
+
+def _advance_puzzle_line(
+    puzzle: DailyPuzzleModel,
+    accepted_moves: list[str],
+    submitted_move: str,
+) -> dict[str, Any]:
+    board = chess.Board(puzzle.fen)
+    solutions: list[list[str]] = json.loads(puzzle.solution_json)
+    for uci in accepted_moves:
+        move = chess.Move.from_uci(uci)
+        if move not in board.legal_moves:
+            raise HTTPException(status_code=500, detail="Stored puzzle progress is invalid")
+        board.push(move)
+    branches = [
+        line for line in solutions
+        if len(line) > len(accepted_moves) and line[:len(accepted_moves)] == accepted_moves
+    ]
+    if not branches:
+        raise HTTPException(status_code=422, detail="Previous moves do not match a valid solution line")
+    try:
+        move = chess.Move.from_uci(submitted_move)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail="Move must be a valid UCI chess move") from error
+    if move not in board.legal_moves:
+        raise HTTPException(status_code=422, detail="That move is illegal in this position")
+    matching = [line for line in branches if line[len(accepted_moves)] == move.uci()]
+    if not matching:
+        return {"correct": False}
+
+    line = matching[0]
+    new_moves = [*accepted_moves, move.uci()]
+    san_moves = [board.san(move)]
+    board.push(move)
+    opponent_move = None
+    if len(new_moves) < len(line):
+        reply = chess.Move.from_uci(line[len(new_moves)])
+        if reply not in board.legal_moves:
+            raise HTTPException(status_code=500, detail="Stored puzzle reply is illegal")
+        opponent_move = reply.uci()
+        san_moves.append(board.san(reply))
+        new_moves.append(opponent_move)
+        board.push(reply)
+    completed = len(new_moves) >= len(line)
+    explanation = _puzzle_explanation(puzzle) if completed else None
+    return {
+        "correct": True,
+        "moves": new_moves,
+        "opponent_move": opponent_move,
+        "completed": completed,
+        "san": san_moves,
+        "explanation": explanation,
+    }
+
+
+def _puzzle_hint(puzzle: DailyPuzzleModel, accepted_moves: list[str], hint_level: int) -> str:
+    solutions: list[list[str]] = json.loads(puzzle.solution_json)
+    if not any(
+        line[:len(accepted_moves)] == accepted_moves
+        and len(line) > len(accepted_moves)
+        for line in solutions
+    ):
+        raise HTTPException(status_code=422, detail="Previous moves do not match a valid solution line")
+    line = next(
+        (candidate for candidate in solutions
+         if candidate[:len(accepted_moves)] == accepted_moves
+         and len(candidate) > len(accepted_moves)),
+        None,
+    )
+    if line is None:
+        return "Look for forcing checks, captures, and threats."
+    board = chess.Board(puzzle.fen)
+    for uci in accepted_moves:
+        board.push_uci(uci)
+    move = chess.Move.from_uci(line[len(accepted_moves)])
+    piece = board.piece_at(move.from_square)
+    if hint_level <= 1:
+        piece_name = chess.piece_name(piece.piece_type) if piece else "piece"
+        return f"Look for a forcing move with your {piece_name}."
+    return f"Find the move from {chess.square_name(move.from_square)} to {chess.square_name(move.to_square)}."
+
+
+@router.get("/api/puzzles/daily")
+def get_daily_puzzle(
+    authorization: Optional[str] = Header(default=None),
+    db: Session = Depends(get_db),
+):
+    profile = _authenticated_profile(authorization, db)
+    assignment, puzzle, local_date = _daily_assignment(db, profile)
+    attempt = db.query(PlayerPuzzleAttemptModel).filter(
+        PlayerPuzzleAttemptModel.profile_id == profile.id,
+        PlayerPuzzleAttemptModel.local_date == local_date,
+    ).first()
+    return {
+        **_public_puzzle_payload(puzzle, local_date=local_date, attempt=attempt),
+        "progress": _puzzle_progress(db, profile.id),
+    }
+
+
+@router.post("/api/puzzles/daily/move")
+def submit_daily_puzzle_move(
+    move_request: PuzzleMove,
+    request: Request,
+    authorization: Optional[str] = Header(default=None),
+    db: Session = Depends(get_db),
+):
+    profile = _authenticated_profile(authorization, db)
+    enforce_room_rate_limit(request, f"puzzle-move:{profile.id}", limit=120)
+    assignment, puzzle, local_date = _daily_assignment(db, profile)
+    if move_request.puzzle_id != assignment.puzzle_id:
+        raise HTTPException(status_code=409, detail="This is not today's assigned puzzle")
+    attempt = _get_or_create_daily_attempt(db, profile.id, puzzle.puzzle_id, local_date)
+    previous_moves = json.loads(attempt.moves_json)
+    result = _advance_puzzle_line(puzzle, previous_moves, move_request.move)
+    if not result["correct"]:
+        attempt.incorrect_attempts += 1
+        db.commit()
+        return {
+            "correct": False,
+            "incorrect_attempts": attempt.incorrect_attempts,
+            "message": "That is a legal move, but it does not solve the puzzle.",
+        }
+    attempt.moves_json = json.dumps(result["moves"])
+    if not result["completed"]:
+        db.commit()
+        return {
+            **result,
+            "incorrect_attempts": attempt.incorrect_attempts,
+            "progress": _puzzle_progress(db, profile.id),
+        }
+
+    base_xp = {"easy": 10, "medium": 15, "hard": 20, "expert": 25}[
+        _puzzle_difficulty(puzzle.rating)
+    ]
+    first_attempt = attempt.incorrect_attempts == 0
+    reward = base_xp + (5 if first_attempt else 0)
+    completed_at = datetime.now(timezone.utc)
+    completion_update = db.query(PlayerPuzzleAttemptModel).filter(
+        PlayerPuzzleAttemptModel.id == attempt.id,
+        PlayerPuzzleAttemptModel.completed.is_(False),
+    ).update(
+        {
+            PlayerPuzzleAttemptModel.completed: True,
+            PlayerPuzzleAttemptModel.first_attempt_correct: first_attempt,
+            PlayerPuzzleAttemptModel.xp_awarded: reward,
+            PlayerPuzzleAttemptModel.completed_at: completed_at,
+            PlayerPuzzleAttemptModel.moves_json: json.dumps(result["moves"]),
+        },
+        synchronize_session=False,
+    )
+    if completion_update != 1:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Daily puzzle completion was already recorded")
+    progress = db.query(PlayerPuzzleProgressModel).filter(
+        PlayerPuzzleProgressModel.profile_id == profile.id
+    ).one()
+    progress.current_streak, progress.best_streak = _next_puzzle_streak(
+        progress.current_streak,
+        progress.best_streak,
+        progress.last_completed_date,
+        local_date,
+    )
+    progress.total_completed += 1
+    progress.first_attempt_correct += int(first_attempt)
+    progress.total_xp_earned += reward
+    progress.last_completed_date = local_date
+    profile.xp += reward
+    try:
+        db.commit()
+    except IntegrityError as error:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Daily puzzle reward was already recorded") from error
+    _invalidate_leaderboard_cache()
+    return {
+        **result,
+        "first_attempt_correct": first_attempt,
+        "xp_awarded": reward,
+        "total_xp": profile.xp,
+        "progress": _puzzle_progress(db, profile.id),
+    }
+
+
+@router.post("/api/puzzles/daily/hint")
+def daily_puzzle_hint(
+    hint_request: PuzzleReset,
+    request: Request,
+    authorization: Optional[str] = Header(default=None),
+    db: Session = Depends(get_db),
+):
+    profile = _authenticated_profile(authorization, db)
+    enforce_room_rate_limit(request, f"puzzle-hint:{profile.id}", limit=30)
+    assignment, puzzle, local_date = _daily_assignment(db, profile)
+    if hint_request.puzzle_id != assignment.puzzle_id:
+        raise HTTPException(status_code=409, detail="This is not today's assigned puzzle")
+    attempt = _get_or_create_daily_attempt(db, profile.id, puzzle.puzzle_id, local_date)
+    attempt.hint_count += 1
+    db.commit()
+    return {
+        "hint": _puzzle_hint(
+            puzzle,
+            json.loads(attempt.moves_json),
+            min(attempt.hint_count, 2),
+        ),
+        "hint_count": attempt.hint_count,
+    }
+
+
+@router.post("/api/puzzles/daily/reset")
+def reset_daily_puzzle(
+    reset_request: PuzzleReset,
+    request: Request,
+    authorization: Optional[str] = Header(default=None),
+    db: Session = Depends(get_db),
+):
+    profile = _authenticated_profile(authorization, db)
+    enforce_room_rate_limit(request, f"puzzle-reset:{profile.id}", limit=30)
+    assignment, _puzzle, local_date = _daily_assignment(db, profile)
+    if reset_request.puzzle_id != assignment.puzzle_id:
+        raise HTTPException(status_code=409, detail="This is not today's assigned puzzle")
+    attempt = db.query(PlayerPuzzleAttemptModel).filter(
+        PlayerPuzzleAttemptModel.profile_id == profile.id,
+        PlayerPuzzleAttemptModel.local_date == local_date,
+    ).first()
+    if attempt and attempt.completed:
+        raise HTTPException(status_code=409, detail="A completed daily puzzle cannot be reset")
+    if attempt:
+        attempt.moves_json = "[]"
+        db.commit()
+    return {"moves": [], "message": "Puzzle position reset; your attempt and hint history remain saved."}
+
+
+@router.get("/api/puzzles/archive")
+def puzzle_archive(
+    difficulty: Optional[str] = Query(default=None),
+    offset: int = Query(default=0, ge=0, le=100_000),
+    limit: int = Query(default=25, ge=1, le=100),
+    authorization: Optional[str] = Header(default=None),
+    db: Session = Depends(get_db),
+):
+    profile = _authenticated_profile(authorization, db)
+    if difficulty not in (None, "easy", "medium", "hard", "expert"):
+        raise HTTPException(status_code=422, detail="Unsupported puzzle difficulty")
+    _daily_assignment(db, profile)
+    query = db.query(DailyPuzzleModel).order_by(
+        DailyPuzzleModel.source_date.desc(), DailyPuzzleModel.puzzle_id.asc()
+    )
+    if difficulty:
+        rating_ranges = {
+            "easy": (0, 1199),
+            "medium": (1200, 1599),
+            "hard": (1600, 1999),
+            "expert": (2000, 100000),
+        }
+        lower, upper = rating_ranges[difficulty]
+        query = query.filter(DailyPuzzleModel.rating.between(lower, upper))
+    total = query.count()
+    puzzles = query.offset(offset).limit(limit).all()
+    attempts = {
+        row.puzzle_id: row
+        for row in db.query(PlayerPuzzleAttemptModel).filter(
+            PlayerPuzzleAttemptModel.profile_id == profile.id,
+            PlayerPuzzleAttemptModel.puzzle_id.in_(
+                [puzzle.puzzle_id for puzzle in puzzles] or [""]
+            ),
+        ).all()
+    }
+    return {
+        "entries": [
+            {
+                **_public_puzzle_payload(puzzle),
+                "completed": bool(attempts.get(puzzle.puzzle_id) and attempts[puzzle.puzzle_id].completed),
+                "xp_awarded": attempts[puzzle.puzzle_id].xp_awarded if puzzle.puzzle_id in attempts else 0,
+            }
+            for puzzle in puzzles
+        ],
+        "total": total,
+        "offset": offset,
+        "limit": limit,
+    }
+
+
+@router.get("/api/puzzles/archive/{puzzle_id}")
+def get_archived_puzzle(
+    puzzle_id: str,
+    authorization: Optional[str] = Header(default=None),
+    db: Session = Depends(get_db),
+):
+    profile = _authenticated_profile(authorization, db)
+    puzzle = db.query(DailyPuzzleModel).filter(DailyPuzzleModel.puzzle_id == puzzle_id).first()
+    if puzzle is None:
+        raise HTTPException(status_code=404, detail="Archived puzzle not found")
+    attempt = db.query(PlayerPuzzleAttemptModel).filter(
+        PlayerPuzzleAttemptModel.profile_id == profile.id,
+        PlayerPuzzleAttemptModel.puzzle_id == puzzle_id,
+        PlayerPuzzleAttemptModel.completed.is_(True),
+    ).first()
+    return {
+        **_public_puzzle_payload(puzzle, attempt=attempt),
+        "practice_only": True,
+    }
+
+
+@router.post("/api/puzzles/archive/{puzzle_id}/move")
+def submit_archive_puzzle_move(
+    puzzle_id: str,
+    move_request: PracticePuzzleMove,
+    request: Request,
+    authorization: Optional[str] = Header(default=None),
+    db: Session = Depends(get_db),
+):
+    profile = _authenticated_profile(authorization, db)
+    enforce_room_rate_limit(request, f"puzzle-practice:{profile.id}", limit=120)
+    puzzle = db.query(DailyPuzzleModel).filter(DailyPuzzleModel.puzzle_id == puzzle_id).first()
+    if puzzle is None:
+        raise HTTPException(status_code=404, detail="Archived puzzle not found")
+    if any(not isinstance(move, str) or not re.fullmatch(
+        r"[a-h][1-8][a-h][1-8][qrbn]?", move
+    ) for move in move_request.moves):
+        raise HTTPException(status_code=422, detail="Previous moves contain invalid UCI notation")
+    result = _advance_puzzle_line(puzzle, move_request.moves, move_request.move)
+    return {**result, "practice_only": True}
+
+
+@router.get("/api/puzzles/archive/{puzzle_id}/hint")
+def archived_puzzle_hint(
+    puzzle_id: str,
+    request: Request,
+    hint_level: int = Query(default=1, ge=1, le=2),
+    moves: list[str] = Query(default=[]),
+    authorization: Optional[str] = Header(default=None),
+    db: Session = Depends(get_db),
+):
+    profile = _authenticated_profile(authorization, db)
+    enforce_room_rate_limit(request, f"puzzle-practice-hint:{profile.id}", limit=30)
+    puzzle = db.query(DailyPuzzleModel).filter(DailyPuzzleModel.puzzle_id == puzzle_id).first()
+    if puzzle is None:
+        raise HTTPException(status_code=404, detail="Archived puzzle not found")
+    if any(not re.fullmatch(r"[a-h][1-8][a-h][1-8][qrbn]?", move) for move in moves):
+        raise HTTPException(status_code=422, detail="Previous moves contain invalid UCI notation")
+    return {
+        "hint": _puzzle_hint(puzzle, moves, hint_level),
+        "practice_only": True,
+    }
 
 
 @router.get("/api/leaderboard")
@@ -311,6 +1054,19 @@ def leaderboard(
     if cutoff is not None:
         match_query = match_query.filter(MatchRecordModel.completed_at >= cutoff)
     stats = match_query.group_by(PlayerMatchModel.profile_id).subquery()
+    puzzle_xp_query = db.query(
+        PlayerPuzzleAttemptModel.profile_id.label("profile_id"),
+        func.coalesce(func.sum(PlayerPuzzleAttemptModel.xp_awarded), 0).label("xp"),
+    ).filter(
+        PlayerPuzzleAttemptModel.completed.is_(True),
+    )
+    if cutoff is not None:
+        puzzle_xp_query = puzzle_xp_query.filter(PlayerPuzzleAttemptModel.completed_at >= cutoff)
+    if game_mode == "four_player":
+        puzzle_xp_query = puzzle_xp_query.filter(False)
+    puzzle_xp_stats = puzzle_xp_query.group_by(
+        PlayerPuzzleAttemptModel.profile_id
+    ).subquery()
 
     rating_column = (
         PlayerProfileModel.classic_rating if game_mode == "classic"
@@ -319,6 +1075,7 @@ def leaderboard(
     games = func.coalesce(stats.c.games, 0)
     wins = func.coalesce(stats.c.wins, 0)
     xp = func.coalesce(stats.c.xp, 0)
+    puzzle_xp = func.coalesce(puzzle_xp_stats.c.xp, 0)
     rated_games = func.coalesce(stats.c.rated_games, 0)
     rating_delta = func.coalesce(stats.c.rating_delta, 0)
     tie_wins = wins
@@ -329,7 +1086,11 @@ def leaderboard(
     elif category == "streak":
         score = PlayerProfileModel.best_streak
     else:
-        score = xp
+        score = (
+            PlayerProfileModel.xp
+            if period == "all_time"
+            else xp + (0 if game_mode == "four_player" else puzzle_xp)
+        )
     ranked_query = db.query(
         PlayerProfileModel.id.label("profile_id"),
         PlayerProfileModel.username.label("username"),
@@ -344,14 +1105,22 @@ def leaderboard(
         func.round(
             wins * 100.0 / func.nullif(games, 0), 1
         ).label("win_percentage"),
-    ).outerjoin(stats, stats.c.profile_id == PlayerProfileModel.id).filter(
+    ).outerjoin(stats, stats.c.profile_id == PlayerProfileModel.id).outerjoin(
+        puzzle_xp_stats,
+        puzzle_xp_stats.c.profile_id == PlayerProfileModel.id,
+    ).filter(
         PlayerProfileModel.is_suspended.is_(False),
         PlayerProfileModel.deleted_at.is_(None),
     )
     if category == "rating":
         ranked_query = ranked_query.filter(rated_games > 0)
     if period != "all_time":
-        ranked_query = ranked_query.filter(stats.c.profile_id.is_not(None))
+        ranked_query = ranked_query.filter(
+            or_(
+                stats.c.profile_id.is_not(None),
+                puzzle_xp_stats.c.profile_id.is_not(None),
+            )
+        )
     ranked = ranked_query.add_columns(
         func.row_number().over(
             order_by=(score.desc(), tie_wins.desc(), PlayerProfileModel.username_key.asc())
