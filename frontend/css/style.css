@@ -2956,3 +2956,89 @@ button:focus-visible {
     .lobby-player-slot { min-height: 82px; }
     .lobby-code-card { padding: 16px; }
 }
+
+.profile-edit-form { display: grid; gap: 8px; }
+.profile-edit-form label, .profile-filters label { color: var(--color-text-secondary); font-size: .78rem; font-weight: 700; }
+.profile-name-row { display: flex; gap: 8px; }
+.profile-name-row input, .profile-filters select {
+    min-width: 0;
+    min-height: 42px;
+    padding: 8px 10px;
+    color: var(--color-text-primary);
+    background: #111319;
+    border: 1px solid var(--border-card);
+    border-radius: var(--radius-sm);
+}
+.profile-name-row input { flex: 1; }
+.profile-name-row button { min-height: 42px; white-space: nowrap; }
+.profile-field-hint, .profile-device-note { color: var(--color-text-muted); font-size: .75rem; }
+.profile-avatar-picker { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+.profile-avatar-picker button {
+    width: 44px;
+    height: 44px;
+    color: var(--color-text-primary);
+    background: #111319;
+    border: 1px solid var(--border-card);
+    border-radius: 12px;
+    font-size: 1.35rem;
+}
+.profile-avatar-picker button.selected { border-color: var(--color-p1); box-shadow: 0 0 12px #00d9ff35; }
+.profile-progression-card, .profile-rating-card {
+    padding: 16px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-card);
+    border-radius: var(--radius-lg);
+}
+.profile-progression-card { display: grid; gap: 8px; margin-top: 12px; }
+.profile-level-title { display: flex; justify-content: space-between; gap: 12px; }
+.profile-level-title strong { color: var(--color-p1); font-size: 1.15rem; }
+.profile-level-title span, #profile-xp-label { color: var(--color-text-secondary); font-size: .8rem; }
+#profile-xp-progress { width: 100%; height: 12px; accent-color: var(--color-p1); }
+.profile-progression-card p { color: var(--color-text-muted); font-size: .75rem; }
+.profile-rating-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
+.profile-rating-card { display: flex; flex-direction: column; gap: 4px; }
+.profile-rating-card > span { color: var(--color-text-muted); font-size: .7rem; font-weight: 700; letter-spacing: .06em; }
+.profile-rating-card strong { color: var(--color-p1); font-family: var(--font-mono); font-size: 1.8rem; }
+.profile-rating-card small { color: var(--color-text-muted); font-size: .7rem; }
+.stats-overview-grid { grid-template-columns: repeat(auto-fit, minmax(95px, 1fr)); margin-top: 12px; }
+.profile-section-header { align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+.profile-filters { display: flex; gap: 8px; }
+.profile-filters label { display: grid; gap: 4px; }
+.profile-filters select { min-height: 36px; }
+.profile-match-list { display: grid; gap: 8px; }
+.profile-match-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    padding: 12px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-card);
+    border-radius: var(--radius-md);
+}
+.profile-match-row > div:first-child { display: grid; gap: 3px; min-width: 0; }
+.profile-match-row small { color: var(--color-text-muted); font-size: .72rem; overflow-wrap: anywhere; }
+.profile-match-result { color: var(--color-text-secondary); font-size: .78rem; text-align: right; }
+.profile-match-result.win { color: var(--color-success); }
+.profile-match-result.loss { color: var(--color-danger); }
+.profile-match-result.draw { color: var(--color-p1); }
+.profile-match-row details { grid-column: 1 / -1; color: var(--color-text-muted); font-size: .75rem; }
+.profile-match-row details summary { cursor: pointer; }
+.profile-match-row details p { padding-top: 6px; overflow-wrap: anywhere; }
+.profile-empty, .profile-load-error { padding: 16px; color: var(--color-text-muted); text-align: center; }
+.profile-load-error { color: var(--color-danger); }
+.profile-device-note { padding: 14px 0 20px; }
+.achievement-badge-card { opacity: .58; }
+.achievement-badge-card.unlocked { border-color: var(--color-p1); opacity: 1; }
+.achievements-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
+
+@media (max-width: 600px) {
+    .profile-name-row { flex-direction: column; }
+    .profile-name-row button { width: 100%; }
+    .profile-rating-grid { grid-template-columns: 1fr; }
+    .profile-match-row { grid-template-columns: 1fr; }
+    .profile-match-result { text-align: left; }
+    .profile-filters { width: 100%; }
+    .profile-filters label { flex: 1; }
+    .profile-filters select { width: 100%; }
+}

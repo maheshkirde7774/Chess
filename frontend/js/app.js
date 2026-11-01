@@ -72,6 +72,7 @@ class QuadChessApp {
             roomCodeTag?.classList.add("hidden");
         }
 
+        if (viewId === "view-profile") window.FOURXProfile?.refresh();
         window.soundSystem.playClick();
     }
 
@@ -508,11 +509,12 @@ class QuadChessApp {
 
     async createOnlineRoom(playerName, settings = {}) {
         try {
+            await window.FOURXProfile.ready;
             this.showToast("Creating Tournament Arena...");
             const serverUrl = window.CONFIG.getServerUrl();
             const res = await fetch(`${serverUrl}/rooms`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: { "Content-Type": "application/json", ...window.FOURXProfile.authHeaders() },
                 body: JSON.stringify({ player_name: playerName, ...settings })
             });
 
@@ -584,11 +586,12 @@ class QuadChessApp {
 
     async joinOnlineRoom(roomCode, playerName) {
         try {
+            await window.FOURXProfile.ready;
             this.showToast(`Connecting to room ${roomCode}...`);
             const serverUrl = window.CONFIG.getServerUrl();
             const res = await fetch(`${serverUrl}/rooms/join`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: { "Content-Type": "application/json", ...window.FOURXProfile.authHeaders() },
                 body: JSON.stringify({ room_code: roomCode, player_name: playerName })
             });
 
@@ -1036,33 +1039,14 @@ class QuadChessApp {
             if (res.ok) {
                 const history = await res.json();
                 this.renderRecentMatches(history);
-                this.updateProfileStats(history);
             } else {
                 this.renderRecentMatches([]);
-                this.updateProfileStats([]);
             }
         } catch (e) {
             // Non-deceptive: show authentic empty state if offline or no recorded matches yet
             this.renderRecentMatches([]);
-            this.updateProfileStats([]);
         }
-    }
-
-    updateProfileStats(history) {
-        const totalEl = document.getElementById("stat-total-games");
-        const winsEl = document.getElementById("stat-wins");
-        const rateEl = document.getElementById("stat-winrate");
-        const streakEl = document.getElementById("stat-streak");
-
-        const list = Array.isArray(history) ? history : [];
-        const total = list.length;
-        const victories = list.filter(h => h.winner === 1).length;
-        const rate = total > 0 ? Math.round((victories / total) * 100) : 0;
-
-        if (totalEl) totalEl.textContent = total;
-        if (winsEl) winsEl.textContent = victories;
-        if (rateEl) rateEl.textContent = `${rate}%`;
-        if (streakEl) streakEl.textContent = victories > 0 ? "1" : "0";
+        window.FOURXProfile?.refresh();
     }
 
     renderRecentMatches(history) {
@@ -1116,27 +1100,14 @@ class QuadChessApp {
     initLeaderboardData() {
         const container = document.getElementById("leaderboard-body");
         if (!container) return;
-
-        const mockLeaders = [
-            { rank: 1, name: "Magnus_Q", rating: 2480, win: "78%", rankClass: "gold" },
-            { rank: 2, name: "Hikaru_Quad", rating: 2415, win: "74%", rankClass: "silver" },
-            { rank: 3, name: "ChessValkyrie", rating: 2360, win: "71%", rankClass: "bronze" },
-            { rank: 4, name: "IronCommander", rating: 2190, win: "68%", rankClass: "" },
-            { rank: 5, name: "Grandmaster (You)", rating: 1540, win: "68%", rankClass: "" },
-            { rank: 6, name: "TacticalBishop", rating: 1520, win: "64%", rankClass: "" }
-        ];
-
-        container.innerHTML = mockLeaders.map(l => `
-            <div class="lb-row">
-                <span class="lb-rank ${l.rankClass}">#${l.rank}</span>
-                <div class="lb-player">
-                    <div class="lb-avatar">${l.name[0]}</div>
-                    <span>${l.name}</span>
-                </div>
-                <span class="lb-rating">${l.rating}</span>
-                <span class="lb-win">${l.win}</span>
-            </div>
-        `).join("");
+        document.querySelectorAll(".lb-tab").forEach(button => {
+            button.addEventListener("click", () => {
+                document.querySelectorAll(".lb-tab").forEach(tab => tab.classList.remove("active"));
+                button.classList.add("active");
+                this.loadLeaderboard(button.dataset.tab || "classic");
+            });
+        });
+        this.loadLeaderboard("classic");
 
         // Companion invites list
         const friendsContainer = document.getElementById("friends-list-container");
@@ -1147,6 +1118,55 @@ class QuadChessApp {
                     <button class="mini-action-btn primary" onclick="window.app.showModal('create-room-modal')">Host Arena & Share Code</button>
                 </div>
             `;
+        }
+    }
+
+    async loadLeaderboard(gameMode) {
+        const container = document.getElementById("leaderboard-body");
+        if (!container) return;
+        container.replaceChildren();
+        try {
+            const response = await fetch(
+                `${window.CONFIG.getServerUrl()}/api/leaderboard?game_mode=${encodeURIComponent(gameMode)}`
+            );
+            const leaders = await response.json();
+            if (!response.ok) throw new Error(leaders.detail || "Leaderboard unavailable");
+            if (leaders.length === 0) {
+                const empty = document.createElement("p");
+                empty.className = "profile-empty";
+                empty.textContent = "No rated profiles yet. Complete rated online matches to appear here.";
+                container.append(empty);
+                return;
+            }
+            const icons = { king: "♔", queen: "♕", rook: "♖", bishop: "♗", knight: "♘", pawn: "♙" };
+            leaders.forEach((leader, index) => {
+                const row = document.createElement("div");
+                row.className = "lb-row";
+                const rank = document.createElement("span");
+                rank.className = `lb-rank ${["gold", "silver", "bronze"][index] || ""}`;
+                rank.textContent = `#${leader.rank}`;
+                const player = document.createElement("div");
+                player.className = "lb-player";
+                const avatar = document.createElement("div");
+                avatar.className = "lb-avatar";
+                avatar.textContent = icons[leader.avatar] || "♘";
+                const name = document.createElement("span");
+                name.textContent = leader.username;
+                player.append(avatar, name);
+                const rating = document.createElement("span");
+                rating.className = "lb-rating";
+                rating.textContent = leader.rating;
+                const win = document.createElement("span");
+                win.className = "lb-win";
+                win.textContent = `${leader.win_percentage}%`;
+                row.append(rank, player, rating, win);
+                container.append(row);
+            });
+        } catch (error) {
+            const notice = document.createElement("p");
+            notice.className = "profile-empty error";
+            notice.textContent = `Leaderboard unavailable: ${error.message}`;
+            container.append(notice);
         }
     }
 

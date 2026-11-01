@@ -242,7 +242,7 @@
                                     <span class="card-title">Profile & Statistics</span>
                                     <span class="card-badge badge-gold">GAME RECORDS</span>
                                 </div>
-                                <p class="card-desc">Inspect match logs recorded in database, army performance, and match history.</p>
+                                <p class="card-desc">Review your level, mode ratings, verified match history, and achievements.</p>
                             </div>
                             <div class="card-action-arrow">→</div>
                         </button>
@@ -536,13 +536,12 @@
                 <div class="dashboard-scrollable">
                     <div class="screen-hero">
                         <h2>Global Leaderboard</h2>
-                        <p>Top grandmasters across the 4-player competitive league</p>
+                        <p>Ratings from completed, authenticated online matches</p>
                     </div>
 
                     <div class="leaderboard-tabs">
-                        <button class="lb-tab active" data-tab="global">Global Top</button>
-                        <button class="lb-tab" data-tab="leagues">Diamond League</button>
-                        <button class="lb-tab" data-tab="friends">Friends</button>
+                        <button class="lb-tab active" data-tab="classic">Classic 1v1</button>
+                        <button class="lb-tab" data-tab="four_player">Four-Player</button>
                     </div>
 
                     <div class="leaderboard-table-card">
@@ -590,95 +589,99 @@
             <!-- VIEW 6: PROFILE & STATS SCREEN -->
             <section id="view-profile" class="app-view">
                 <div class="dashboard-scrollable">
+                    <p id="profile-load-error" class="profile-load-error hidden" role="alert"></p>
                     <div class="profile-header-card">
                         <div class="profile-banner-top">
                             <div class="profile-big-avatar">
-                                <span class="avatar-letter">C</span>
-                                <button class="avatar-edit-badge" id="btn-change-avatar">✏</button>
+                                <span class="avatar-letter" id="profile-avatar-icon">♘</span>
                             </div>
                             <div class="profile-header-info">
                                 <h3 id="profile-full-name">Commander</h3>
-                                <span class="profile-subtitle">Local Profile · SQLite Synchronized</span>
+                                <span class="profile-subtitle" id="profile-joined">Device profile</span>
                             </div>
                         </div>
-
-                        <div class="stats-overview-grid">
-                            <div class="stat-card">
-                                <span class="stat-num" id="stat-total-games">0</span>
-                                <span class="stat-lbl">Matches</span>
+                        <form id="profile-edit-form" class="profile-edit-form">
+                            <label for="profile-username-input">Unique username</label>
+                            <div class="profile-name-row">
+                                <input id="profile-username-input" name="username" minlength="3" maxlength="20"
+                                       pattern="[A-Za-z0-9_]{3,20}" autocomplete="nickname" required>
+                                <button class="neon-btn secondary-btn" type="submit">Save Profile</button>
                             </div>
-                            <div class="stat-card">
-                                <span class="stat-num" id="stat-wins" style="color:var(--color-p3)">0</span>
-                                <span class="stat-lbl">Victories</span>
+                            <span class="profile-field-hint">3–20 letters, numbers, or underscores. This profile stays on this device.</span>
+                            <div class="profile-avatar-picker" role="group" aria-label="Choose profile avatar">
+                                <button type="button" data-profile-avatar="king" aria-label="King avatar">♔</button>
+                                <button type="button" data-profile-avatar="queen" aria-label="Queen avatar">♕</button>
+                                <button type="button" data-profile-avatar="rook" aria-label="Rook avatar">♖</button>
+                                <button type="button" data-profile-avatar="bishop" aria-label="Bishop avatar">♗</button>
+                                <button type="button" data-profile-avatar="knight" aria-label="Knight avatar">♘</button>
+                                <button type="button" data-profile-avatar="pawn" aria-label="Pawn avatar">♙</button>
                             </div>
-                            <div class="stat-card">
-                                <span class="stat-num" id="stat-winrate" style="color:var(--color-p1)">0%</span>
-                                <span class="stat-lbl">Win Rate</span>
-                            </div>
-                            <div class="stat-card">
-                                <span class="stat-num" id="stat-streak" style="color:var(--color-p4)">0</span>
-                                <span class="stat-lbl">Best Streak</span>
-                            </div>
-                        </div>
+                        </form>
                     </div>
 
-                    <div class="section-header">
-                        <h3>Army History</h3>
-                        <span class="section-hint">Loaded from server records</span>
+                    <div class="profile-progression-card">
+                        <div class="profile-level-title">
+                            <strong>Level <span id="profile-level">1</span></strong>
+                            <span id="profile-total-xp">0 total XP</span>
+                        </div>
+                        <progress id="profile-xp-progress" max="100" value="0" aria-label="XP progress to next level"></progress>
+                        <span id="profile-xp-label">0 / 100 XP</span>
+                        <p>Server-verified games only: 10 XP for completion, plus 15 for a win or 5 for a draw. Abandoned and local games earn nothing.</p>
                     </div>
 
-                    <div class="army-mastery-grid">
-                        <div class="mastery-item player-1 is-placeholder">
-                            <span class="army-badge">South Cyan</span>
-                            <strong id="stat-army-1">— Matches</strong>
-                            <small>No data recorded yet</small>
-                        </div>
-                        <div class="mastery-item player-2 is-placeholder">
-                            <span class="army-badge">West Magenta</span>
-                            <strong id="stat-army-2">— Matches</strong>
-                            <small>No data recorded yet</small>
-                        </div>
-                        <div class="mastery-item player-3 is-placeholder">
-                            <span class="army-badge">North Lime</span>
-                            <strong id="stat-army-3">— Matches</strong>
-                            <small>No data recorded yet</small>
-                        </div>
-                        <div class="mastery-item player-4 is-placeholder">
-                            <span class="army-badge">East Gold</span>
-                            <strong id="stat-army-4">— Matches</strong>
-                            <small>No data recorded yet</small>
-                        </div>
+                    <div class="profile-rating-grid">
+                        <article class="profile-rating-card">
+                            <span>CLASSIC 1V1 RATING</span>
+                            <strong id="profile-classic-rating">1200</strong>
+                            <small>Elo · rated online matches</small>
+                        </article>
+                        <article class="profile-rating-card">
+                            <span>FOUR-PLAYER RATING</span>
+                            <strong id="profile-four-rating">1200</strong>
+                            <small>Four-player Elo variant · online matches</small>
+                        </article>
                     </div>
 
-                    <div class="section-header" style="margin-top: 6px;">
+                    <div class="stats-overview-grid">
+                        <div class="stat-card"><span class="stat-num" id="stat-total-games">0</span><span class="stat-lbl">Matches</span></div>
+                        <div class="stat-card"><span class="stat-num" id="stat-wins">0</span><span class="stat-lbl">Wins</span></div>
+                        <div class="stat-card"><span class="stat-num" id="stat-losses">0</span><span class="stat-lbl">Losses</span></div>
+                        <div class="stat-card"><span class="stat-num" id="stat-draws">0</span><span class="stat-lbl">Draws</span></div>
+                        <div class="stat-card"><span class="stat-num" id="stat-winrate">0%</span><span class="stat-lbl">Win Rate</span></div>
+                        <div class="stat-card"><span class="stat-num" id="stat-streak">0</span><span class="stat-lbl">Win Streak</span></div>
+                        <div class="stat-card"><span class="stat-num" id="stat-best-streak">0</span><span class="stat-lbl">Best Streak</span></div>
+                    </div>
+
+                    <div class="section-header profile-section-header">
+                        <h3>Match History</h3>
+                        <div class="profile-filters">
+                            <label>Mode
+                                <select id="profile-mode-filter">
+                                    <option value="">All modes</option>
+                                    <option value="classic">Classic 1v1</option>
+                                    <option value="four_player">Four-Player</option>
+                                </select>
+                            </label>
+                            <label>Result
+                                <select id="profile-result-filter">
+                                    <option value="">All results</option>
+                                    <option value="win">Wins</option>
+                                    <option value="loss">Losses</option>
+                                    <option value="draw">Draws</option>
+                                </select>
+                            </label>
+                        </div>
+                    </div>
+                    <div id="profile-match-list" class="profile-match-list">
+                        <p class="profile-empty">Loading verified match history…</p>
+                    </div>
+
+                    <div class="section-header profile-section-header">
                         <h3>Achievements</h3>
-                        <span class="section-hint">Coming in a future update</span>
+                        <span class="section-hint">Unlocked from verified match results</span>
                     </div>
-
-                    <div class="achievements-list">
-                        <div class="achievement-badge-card">
-                            <span class="ach-icon" style="opacity:0.4">👑</span>
-                            <div class="ach-meta">
-                                <strong style="color: var(--color-text-muted)">Coronation Master</strong>
-                                <small>Promote 50 Pawns in tournament play</small>
-                            </div>
-                        </div>
-                        <div class="achievement-badge-card">
-                            <span class="ach-icon" style="opacity:0.4">🛡</span>
-                            <div class="ach-meta">
-                                <strong style="color: var(--color-text-muted)">Last Stand</strong>
-                                <small>Win a match after being placed in check 5 times</small>
-                            </div>
-                        </div>
-                        <div class="achievement-badge-card">
-                            <span class="ach-icon" style="opacity:0.4">⚡</span>
-                            <div class="ach-meta">
-                                <strong style="color: var(--color-text-muted)">Grand Slam</strong>
-                                <small>Checkmate all 3 rival kings in a single match</small>
-                            </div>
-                        </div>
-                        <p class="placeholder-note" style="text-align:center; margin-top:6px;">Achievement tracking will be enabled in a future update.</p>
-                    </div>
+                    <div id="profile-achievements" class="achievements-list"></div>
+                    <p class="profile-device-note">Device-only account: clearing this browser’s site data or changing devices removes access to this profile. There is no password or account recovery.</p>
                 </div>
             </section>
 
@@ -1155,6 +1158,7 @@
     <script src="js/chess-engine-client.js"></script>
     <script src="js/ui.js"></script>
     <script src="js/ws-client.js"></script>
+    <script src="js/profile.js"></script>
     <script src="js/classic-chess.js"></script>
     <script src="js/app.js"></script>
 </body>

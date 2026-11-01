@@ -135,9 +135,14 @@ class ClassicChessUI {
     }
 
     async request(path, options = {}) {
+        await window.FOURXProfile.ready;
         const response = await fetch(`${window.CONFIG.getServerUrl()}${path}`, {
             ...options,
-            headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+            headers: {
+                "Content-Type": "application/json",
+                ...window.FOURXProfile.authHeaders(),
+                ...(options.headers || {}),
+            },
         });
         const data = await response.json();
         if (!response.ok) throw new Error(data.detail || "Classic chess request failed");

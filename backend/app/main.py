@@ -11,7 +11,9 @@ import string
 import logging
 import re
 import time
+import uuid
 from collections import deque
+from datetime import datetime, timezone
 from typing import Dict, Any, Optional
 from contextlib import asynccontextmanager
 
@@ -35,6 +37,7 @@ from app.models import (
 from app.ws_manager import manager
 from app.classic import router as classic_router
 from app.room_limits import enforce_room_rate_limit as _rate_limit
+from app.profiles import profile_from_authorization, record_completed_match, router as profile_router
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
@@ -106,6 +109,8 @@ def get_or_create_room_runtime(db: Session, room_code: str) -> Optional[Dict[str
         "engine": engine,
         "players": players_data,
         "status": room_record.status or "WAITING",
+        "match_id": room_record.match_id or str(uuid.uuid4()),
+        "started_at": room_record.started_at,
         "settings": {
             "game_mode": "four_player",
             "is_private": True,
@@ -133,6 +138,8 @@ def persist_room_state(db: Session, room_code: str):
     room_record.state_json = json.dumps(room_data["engine"].get_state())
     room_record.settings_json = json.dumps(_settings(room_data))
     room_record.winner = room_data["engine"].winner
+    room_record.match_id = room_data.get("match_id")
+    room_record.started_at = room_data.get("started_at")
     db.commit()
 
 @asynccontextmanager
@@ -160,6 +167,7 @@ app.add_middleware(
 )
 
 app.include_router(classic_router)
+app.include_router(profile_router)
 
 # ----------------- REST ENDPOINTS -----------------
 
@@ -186,7 +194,8 @@ def create_room(req: CreateRoomRequest, request: Request, db: Session = Depends(
 
     player_id = _new_player_id()
     player_role = PLAYER_CYAN
-    player_name = req.player_name.strip() or "Player 1"
+    profile = profile_from_authorization(request.headers.get("authorization"), db)
+    player_name = profile.username if profile else (req.player_name.strip() or "Player 1")
 
     engine = FourPlayerChessEngine()
     players = {
@@ -196,6 +205,7 @@ def create_room(req: CreateRoomRequest, request: Request, db: Session = Depends(
             "connected": False,
             "ready": True,
             "host": True,
+            "profile_id": profile.id if profile else None,
         }
     }
 
@@ -203,6 +213,8 @@ def create_room(req: CreateRoomRequest, request: Request, db: Session = Depends(
         "engine": engine,
         "players": players,
         "status": "WAITING",
+        "match_id": str(uuid.uuid4()),
+        "started_at": None,
         "settings": {
             "game_mode": "four_player",
             "is_private": req.is_private,
@@ -218,6 +230,7 @@ def create_room(req: CreateRoomRequest, request: Request, db: Session = Depends(
         players_json=json.dumps(players),
         state_json=json.dumps(engine.get_state()),
         settings_json=json.dumps(active_rooms[room_code]["settings"]),
+        match_id=active_rooms[room_code]["match_id"],
     )
     db.add(room_record)
     db.commit()
@@ -258,7 +271,10 @@ async def join_room(req: JoinRoomRequest, request: Request, db: Session = Depend
         raise HTTPException(status_code=400, detail="Room is full (all 4 seats are occupied)")
 
     player_id = _new_player_id()
-    player_name = req.player_name.strip() or f"Player {assigned_role}"
+    profile = profile_from_authorization(request.headers.get("authorization"), db)
+    if profile and any(player.get("profile_id") == profile.id for player in players.values()):
+        raise HTTPException(status_code=409, detail="This profile already has a seat in the room")
+    player_name = profile.username if profile else (req.player_name.strip() or f"Player {assigned_role}")
 
     players[assigned_role] = {
         "player_id": player_id,
@@ -266,6 +282,7 @@ async def join_room(req: JoinRoomRequest, request: Request, db: Session = Depend
         "connected": False,
         "ready": False,
         "host": False,
+        "profile_id": profile.id if profile else None,
     }
 
     persist_room_state(db, room_code)
@@ -379,6 +396,7 @@ async def start_room(room_code: str, req: ResignRequest, db: Session = Depends(g
     if len(room_data["players"]) != room_data["settings"]["max_players"]:
         raise HTTPException(status_code=400, detail="All player seats must be filled before starting")
     room_data["status"] = "PLAYING"
+    room_data["started_at"] = datetime.now(timezone.utc)
     persist_room_state(db, code)
     await manager.broadcast_to_room(code, {
         "type": "GAME_STARTED", "room_code": code,
@@ -517,6 +535,8 @@ async def reset_room(room_code: str, req: ResignRequest, db: Session = Depends(g
 
     room_data["engine"] = FourPlayerChessEngine()
     room_data["status"] = "WAITING"
+    room_data["match_id"] = str(uuid.uuid4())
+    room_data["started_at"] = None
     persist_room_state(db, room_code)
 
     await manager.broadcast_to_room(room_code, {
@@ -711,6 +731,7 @@ async def websocket_endpoint(
                     await manager.send_personal_message(room_code, client_key, {"type": "ERROR", "message": "All player seats must be filled before starting"})
                     continue
                 room_data["status"] = "PLAYING"
+                room_data["started_at"] = datetime.now(timezone.utc)
                 persist_room_state(db, room_code)
                 await manager.broadcast_to_room(room_code, {
                     "type": "GAME_STARTED", "room_code": room_code,
@@ -781,15 +802,54 @@ def _valid_square(square: Any) -> bool:
 
 def _record_completed_game(db: Session, room_code: str, engine: FourPlayerChessEngine):
     """Saves a completed game to GameHistoryModel."""
+    room_data = active_rooms.get(room_code)
+    if room_data is None:
+        return
     try:
-        history_entry = GameHistoryModel(
-            room_code=room_code,
-            winner=engine.winner,
-            total_moves=len(engine.move_history),
-            moves_history_json=json.dumps(engine.move_history)
+        match_id = room_data["match_id"]
+        history_entry = db.query(GameHistoryModel).filter(
+            GameHistoryModel.match_id == match_id
+        ).first()
+        if history_entry is None:
+            history_entry = GameHistoryModel(
+                room_code=room_code,
+                winner=engine.winner,
+                total_moves=len(engine.move_history),
+                moves_history_json=json.dumps(engine.move_history),
+                match_id=match_id,
+            )
+            db.add(history_entry)
+            db.commit()
+        players = room_data["players"]
+        participants = [
+            {
+                "profile_id": player.get("profile_id"),
+                "username": player.get("name", f"Player {role}"),
+                "role": role,
+            }
+            for role, player in players.items()
+        ]
+        winner_profile_id = (
+            players.get(engine.winner, {}).get("profile_id")
+            if engine.winner is not None else None
         )
-        db.add(history_entry)
-        db.commit()
+        started_at = room_data.get("started_at")
+        if started_at and started_at.tzinfo is None:
+            started_at = started_at.replace(tzinfo=timezone.utc)
+        duration = int((datetime.now(timezone.utc) - started_at).total_seconds()) if started_at else 0
+        record_completed_match(
+            db,
+            match_id=match_id,
+            room_code=room_code,
+            game_mode="four_player",
+            started_at=started_at,
+            moves=engine.move_history,
+            participants=participants,
+            winner_profile_id=winner_profile_id,
+            is_draw=engine.winner is None,
+            duration_seconds=duration,
+            rated=True,
+        )
     except Exception as e:
         logger.error(f"Failed to record game history for {room_code}: {e}")
 

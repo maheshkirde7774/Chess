@@ -8,6 +8,7 @@ import string
 import threading
 import time
 import uuid
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 import chess
@@ -19,6 +20,7 @@ from app.db import ClassicRoomModel, get_db
 from app.ws_manager import manager
 from app.room_limits import enforce_room_rate_limit
 from app.classic_ai import DIFFICULTIES, choose_move
+from app.profiles import profile_from_authorization, record_completed_match, classic_comeback
 
 logger = logging.getLogger("classic_chess")
 router = APIRouter()
@@ -243,6 +245,8 @@ def _runtime(db: Session, code: str) -> Optional[Dict[str, Any]]:
         "mode": record.mode,
         "time_control": record.time_control,
         "status": record.status,
+        "match_id": record.match_id or str(uuid.uuid4()),
+        "started_at": record.started_at,
         "players": players,
         "game": game,
         "is_private": record.is_private,
@@ -268,7 +272,54 @@ def _persist(db: Session, code: str, room: Dict[str, Any]) -> None:
     record.players_json = json.dumps(room["players"])
     record.state_json = json.dumps(room["game"].serialize())
     record.ai_config_json = json.dumps(room.get("ai", {}))
+    record.match_id = room.get("match_id")
+    record.started_at = room.get("started_at")
     db.commit()
+    if snapshot["status"] == "COMPLETED":
+        _record_completed_match(db, code, room)
+
+
+def _record_completed_match(db: Session, code: str, room: Dict[str, Any]) -> None:
+    game = room["game"]
+    result = game.result
+    if not result:
+        return
+    participants = []
+    if room["mode"] != "local":
+        participants = [
+            {
+                "profile_id": player.get("profile_id"),
+                "username": player.get("name", side.title()),
+                "role": side,
+            }
+            for side, player in room["players"].items()
+        ]
+    winner_side = "white" if result == "1-0" else "black" if result == "0-1" else None
+    winner_profile_id = (
+        room["players"].get(winner_side, {}).get("profile_id")
+        if winner_side else None
+    )
+    started_at = room.get("started_at")
+    if started_at and started_at.tzinfo is None:
+        started_at = started_at.replace(tzinfo=timezone.utc)
+    duration = int((datetime.now(timezone.utc) - started_at).total_seconds()) if started_at else 0
+    moves = list(game.moves)
+    record_completed_match(
+        db,
+        match_id=room["match_id"],
+        room_code=code,
+        game_mode="classic",
+        started_at=started_at,
+        moves=moves,
+        participants=participants,
+        winner_profile_id=winner_profile_id,
+        is_draw=result == "1/2-1/2",
+        duration_seconds=duration,
+        rated=room["mode"] == "online",
+        comeback=winner_side is not None and classic_comeback(
+            [{"uci": move["uci"]} for move in moves], winner_side
+        ),
+    )
 
 
 def _public_state(code: str, room: Dict[str, Any]) -> Dict[str, Any]:
@@ -387,13 +438,21 @@ def create_classic_room(
         raise HTTPException(status_code=422, detail="Unsupported AI difficulty")
     if request.human_side not in {"white", "black"}:
         raise HTTPException(status_code=422, detail="Human side must be white or black")
+    profile = profile_from_authorization(http_request.headers.get("authorization"), db)
     started = mode == "local"
     game_active = mode in {"local", "ai"}
     game = ClassicGame(control, started)
+    if profile and mode == "local":
+        player_name = profile.username
+    elif profile:
+        player_name = profile.username
+    else:
+        player_name = request.player_name.strip() or "White"
     ai_config = {}
     players = {
-        "white": {"player_id": white_id, "name": request.player_name.strip() or "White",
-                  "connected": False, "ready": True, "host": True}
+        "white": {"player_id": white_id, "name": player_name,
+                  "connected": False, "ready": True, "host": True,
+                  "profile_id": profile.id if profile else None}
     }
     if started:
         players["black"] = {"player_id": white_id, "name": "Black", "connected": False, "ready": True}
@@ -403,10 +462,12 @@ def create_classic_room(
         ai_name = f"FOURX · {request.ai_difficulty.title()}"
         human_id = str(uuid.uuid4())
         players = {
-            human_side: {"player_id": human_id, "name": request.player_name.strip() or "Player",
-                         "connected": False, "ready": True, "host": True},
+            human_side: {"player_id": human_id, "name": player_name,
+                         "connected": False, "ready": True, "host": True,
+                         "profile_id": profile.id if profile else None},
             ai_side: {"player_id": f"ai:{code}", "name": ai_name,
-                      "connected": True, "ready": True, "host": False},
+                      "connected": True, "ready": True, "host": False,
+                      "profile_id": None},
         }
         ai_config = {
             "difficulty": request.ai_difficulty,
@@ -416,6 +477,8 @@ def create_classic_room(
         white_id = human_id
     room = {"mode": mode, "time_control": control, "status": "PLAYING" if game_active else "WAITING",
             "players": players, "game": game, "is_private": request.is_private,
+            "match_id": str(uuid.uuid4()),
+            "started_at": datetime.now(timezone.utc) if started else None,
             "ai": ai_config, "ai_thinking": False, "generation": 0,
             "ai_cancel": threading.Event()}
     classic_rooms[code] = room
@@ -423,6 +486,7 @@ def create_classic_room(
         room_code=code, mode=mode, time_control=control, status=room["status"],
         players_json=json.dumps(players), state_json=json.dumps(game.serialize()),
         is_private=request.is_private, ai_config_json=json.dumps(ai_config),
+        match_id=room["match_id"], started_at=room["started_at"],
     )
     db.add(record)
     db.commit()
@@ -449,10 +513,14 @@ async def join_classic_room(
     if room["status"] != "WAITING" or "black" in room["players"]:
         raise HTTPException(status_code=400, detail="Classic room is full or already started")
 
+    profile = profile_from_authorization(http_request.headers.get("authorization"), db)
+    if profile and any(player.get("profile_id") == profile.id for player in room["players"].values()):
+        raise HTTPException(status_code=409, detail="This profile already has a seat in the room")
     black_id = str(uuid.uuid4())
     room["players"]["black"] = {
-        "player_id": black_id, "name": request.player_name.strip() or "Black",
+        "player_id": black_id, "name": profile.username if profile else request.player_name.strip() or "Black",
         "connected": False, "ready": False, "host": False,
+        "profile_id": profile.id if profile else None,
     }
     _persist(db, code, room)
     await manager.broadcast_to_room(f"classic:{code}", {
@@ -478,6 +546,7 @@ async def start_classic_room(room_code: str, request: ClassicPlayerRequest, db: 
     if room["mode"] != "online" or len(room["players"]) != 2:
         raise HTTPException(status_code=400, detail="Both player seats must be filled before starting")
     room["status"] = "PLAYING"
+    room["started_at"] = datetime.now(timezone.utc)
     if room["game"].clock_started_at is None and room["game"].clocks["white"] is not None:
         room["game"].clock_started_at = time.time()
     _persist(db, code, room)
@@ -504,6 +573,8 @@ async def restart_classic_room(room_code: str, request: ClassicPlayerRequest, db
     room["ai_cancel"] = threading.Event()
     room["game"] = ClassicGame(room["time_control"], started=True)
     room["status"] = "PLAYING"
+    room["match_id"] = str(uuid.uuid4())
+    room["started_at"] = datetime.now(timezone.utc)
     room["ai_thinking"] = False
     _persist(db, code, room)
     await manager.broadcast_to_room(f"classic:{code}", {
@@ -619,6 +690,8 @@ async def classic_websocket(
     await manager.connect(manager_room, player_id, websocket, accepted=True)
     room["players"][side]["connected"] = True
     if room["mode"] == "ai" and room["game"].clock_started_at is None:
+        if room.get("started_at") is None:
+            room["started_at"] = datetime.now(timezone.utc)
         if any(value is not None for value in room["game"].clocks.values()):
             room["game"].clock_started_at = time.time()
     _persist(db, code, room)
@@ -702,6 +775,7 @@ async def classic_websocket(
                     if room["mode"] != "online" or len(room["players"]) != 2:
                         raise ValueError("Both player seats must be filled before starting")
                     room["status"] = "PLAYING"
+                    room["started_at"] = datetime.now(timezone.utc)
                     if room["game"].clock_started_at is None and room["game"].clocks["white"] is not None:
                         room["game"].clock_started_at = time.time()
                 elif message_type == "READY":

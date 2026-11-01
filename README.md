@@ -7,7 +7,7 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115%2B-ec4899?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![WebSockets](https://img.shields.io/badge/WebSockets-Real--Time-10b981?style=for-the-badge&logo=websocket&logoColor=black)](https://websockets.readthedocs.io/)
 [![Capacitor](https://img.shields.io/badge/Capacitor-Android%20Ready-f59e0b?style=for-the-badge&logo=capacitor&logoColor=black)](https://capacitorjs.com/)
-[![Tests](https://img.shields.io/badge/Tests-28%20Passed-0ea5e9?style=for-the-badge&logo=pytest&logoColor=black)](backend/tests/)
+[![Tests](https://img.shields.io/badge/Tests-50%20Passed-0ea5e9?style=for-the-badge&logo=pytest&logoColor=black)](backend/tests/)
 [![License](https://img.shields.io/badge/License-MIT-ffffff?style=for-the-badge)](LICENSE)
 
 <br/>
@@ -208,6 +208,14 @@ Four-player rooms use `/rooms` and `/ws/{room_code}` and keep the original four-
 
 Both online modes provide a waiting lobby with room code copy/share, occupied and empty seats, presence/readiness, host start, and waiting-room leave. Share uses the native Web Share API when available and falls back to copying the room code. Player credentials are bearer secrets returned only to the matching player; they are excluded from room snapshots and broadcasts.
 
+## Player Profiles & Progression
+
+The Profile screen creates a device-scoped profile automatically. Its opaque bearer credential is stored in this browser's local storage and is returned only during profile creation; it is not a password account and cannot be recovered or transferred to another device. Users can choose a preset avatar and edit a unique 3–20 character username. Match attribution uses the profile credential at room creation/join, while game actions continue to require the existing room player credential.
+
+Only server-completed matches are recorded. Abandoned/waiting games, local pass-and-play, and client-side bot/puzzle games do not change a profile because their outcomes are not server-verified. A completed match awards 10 XP, plus 15 XP for a win or 5 XP for a draw. Level 1 requires 100 XP, with each subsequent level requiring 100 more XP than the prior level. Classic AI matches award XP and count in stats/history but are unrated. Classic online rating uses Elo (initial rating 1200, K=32); draw scores are 0.5. Four-Player online rating starts at 1200 and uses a documented multiplayer Elo variant (K=24 against the average opponents' rating; the winner scores 1, each other player 0, and a draw gives each 0.5). Ratings update only when every participant in that online match is linked to a different profile; the two modes have separate rating histories.
+
+Achievements are based on persisted match outcomes: First Victory, 10 Games Played, 10 Wins, a five-win streak, a Four-Player win, Classic Chess rating of 2000, and a Classic comeback win after trailing by at least three points of material during the game. Existing matches from before profile tracking are retained but are not attributed retroactively. Device-local pass-and-play is not counted because it has no distinct authenticated player identities.
+
 ---
 
 ## 📱 Android Build & Deployment
@@ -264,6 +272,11 @@ cd android
 | `POST` | `/rooms/{code}/resign` | Resign current player |
 | `POST` | `/rooms/{code}/reset` | Rematch & reset board |
 | `GET` | `/api/history` | Match log of completed games |
+| `POST` | `/api/profile` | Create a device profile and receive its one-time bearer credential |
+| `GET` | `/api/profile` | Read the authenticated profile, ratings, stats, level, and achievements |
+| `PATCH` | `/api/profile` | Update the authenticated profile username or preset avatar |
+| `GET` | `/api/profile/matches` | Read authenticated match history; optional `game_mode` and `result` filters |
+| `GET` | `/api/leaderboard?game_mode=classic` | Public Classic or Four-Player profile ratings |
 | `POST` | `/classic/rooms` | Create a local or online classic 1v1 match |
 | `POST` | `/classic/rooms/join` | Join an available classic match as Black |
 | `POST` | `/classic/rooms/{code}/start` | Start a full Classic room as its host |
