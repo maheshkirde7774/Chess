@@ -1736,6 +1736,90 @@ html, body {
 .lb-avatar { width: 24px; height: 24px; border-radius: 50%; background: #262a36; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; }
 .lb-rating { font-family: var(--font-mono); font-weight: 600; }
 .lb-win { color: var(--color-success); font-weight: 600; }
+.leaderboard-controls { display: grid; gap: 10px; margin-bottom: 14px; }
+.leaderboard-period-tabs .lb-tab { padding: 7px 10px; }
+.leaderboard-tools { display: flex; gap: 10px; }
+.leaderboard-tools input, .leaderboard-tools select {
+    min-width: 0;
+    flex: 1;
+    padding: 10px 12px;
+    color: var(--color-text-primary);
+    background: var(--bg-card);
+    border: 1px solid var(--border-card);
+    border-radius: var(--radius-md);
+}
+.lb-podium { display: flex; align-items: end; justify-content: center; gap: 12px; margin: 18px 0; }
+.lb-podium-card {
+    order: 2;
+    width: min(32%, 210px);
+    min-height: 108px;
+    padding: 14px 10px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 7px;
+    color: var(--color-text-primary);
+    background: linear-gradient(160deg, rgba(245,158,11,.16), var(--bg-card) 70%);
+    border: 1px solid rgba(245,158,11,.36);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+}
+.lb-podium-card.place-1 { order: 1; min-height: 132px; border-color: #fbbf24; }
+.lb-podium-card.place-2 { order: 0; background: linear-gradient(160deg, rgba(203,213,225,.12), var(--bg-card) 70%); border-color: rgba(203,213,225,.35); }
+.lb-podium-card.place-3 { order: 2; background: linear-gradient(160deg, rgba(249,115,22,.12), var(--bg-card) 70%); border-color: rgba(249,115,22,.35); }
+.lb-podium-rank { color: var(--color-p1); font-family: var(--font-mono); font-weight: 700; }
+.lb-podium-card strong { overflow: hidden; text-overflow: ellipsis; }
+.lb-podium-card span:last-child { color: var(--color-text-secondary); font-size: .78rem; }
+.lb-current-player {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    margin-bottom: 12px;
+    padding: 12px 14px;
+    color: var(--color-p1);
+    background: var(--color-p1-muted);
+    border: 1px solid var(--color-p1-border);
+    border-radius: var(--radius-md);
+}
+.lb-current-player span { color: var(--color-text-secondary); font-size: .8rem; }
+.leaderboard-table-card { overflow-x: auto; }
+.lb-header-row, .lb-row {
+    min-width: 550px;
+    grid-template-columns: 48px minmax(120px, 1fr) 68px 54px 54px 66px;
+}
+.lb-profile-link {
+    padding: 0;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    background: none;
+    border: 0;
+    cursor: pointer;
+}
+.lb-profile-link:hover { color: var(--color-p1); text-decoration: underline; }
+.lb-change { font-family: var(--font-mono); font-size: .78rem; }
+.lb-change.positive { color: var(--color-success); }
+.lb-change.negative { color: #fb7185; }
+.lb-pagination { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 12px 0 22px; color: var(--color-text-secondary); font-size: .82rem; }
+.lb-pagination > div { display: flex; gap: 8px; }
+.lb-pagination .neon-btn { min-height: 40px; padding: 8px 12px; }
+.lb-public-profile { margin-top: 16px; padding: 16px; background: var(--bg-card); border: 1px solid var(--border-card); border-radius: var(--radius-md); }
+.lb-public-profile h3 { margin: 12px 0 6px; }
+.lb-public-profile p { color: var(--color-text-secondary); margin: 6px 0; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+
+@media (max-width: 600px) {
+    .leaderboard-tabs { gap: 6px; }
+    .leaderboard-tabs .lb-tab { padding: 8px 6px; font-size: .74rem; }
+    .leaderboard-tools { flex-direction: column; }
+    .lb-podium { gap: 6px; }
+    .lb-podium-card { width: 33.333%; min-height: 100px; padding: 10px 6px; font-size: .78rem; }
+    .lb-podium-card.place-1 { min-height: 120px; }
+    .lb-header-row, .lb-row { min-width: 500px; grid-template-columns: 40px minmax(105px, 1fr) 55px 42px 44px 52px; }
+    .lb-header-row { padding: 9px 8px; font-size: .62rem; }
+    .lb-row { padding: 11px 8px; font-size: .76rem; }
+    .lb-pagination { align-items: flex-start; flex-direction: column; }
+}
 
 /* Profile View Elements */
 .profile-header-card {

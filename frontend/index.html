@@ -539,22 +539,55 @@
                         <p>Ratings from completed, authenticated online matches</p>
                     </div>
 
-                    <div class="leaderboard-tabs">
-                        <button class="lb-tab active" data-tab="classic">Classic 1v1</button>
-                        <button class="lb-tab" data-tab="four_player">Four-Player</button>
+                    <div class="leaderboard-controls">
+                        <div class="leaderboard-tabs" aria-label="Game mode">
+                            <button class="lb-tab active" data-lb-mode="four_player">Four-Player</button>
+                            <button class="lb-tab" data-lb-mode="classic">Classic 1v1</button>
+                        </div>
+                        <div class="leaderboard-tabs leaderboard-period-tabs" aria-label="Ranking period">
+                            <button class="lb-tab active" data-lb-period="all_time">All Time</button>
+                            <button class="lb-tab" data-lb-period="weekly">Weekly</button>
+                            <button class="lb-tab" data-lb-period="monthly">Monthly</button>
+                        </div>
+                        <div class="leaderboard-tools">
+                            <label class="sr-only" for="leaderboard-category">Ranking category</label>
+                            <select id="leaderboard-category">
+                                <option value="rating">Highest Rating</option>
+                                <option value="wins">Most Wins</option>
+                                <option value="streak">Highest Win Streak</option>
+                                <option value="xp">Highest XP</option>
+                            </select>
+                            <label class="sr-only" for="leaderboard-search">Search players</label>
+                            <input id="leaderboard-search" type="search" maxlength="24" placeholder="Search players">
+                        </div>
                     </div>
 
+                    <div class="lb-podium" id="leaderboard-podium" aria-label="Top three players"></div>
+                    <div class="lb-current-player hidden" id="leaderboard-current"></div>
                     <div class="leaderboard-table-card">
                         <div class="lb-header-row">
                             <span class="lb-col-rank">RANK</span>
                             <span class="lb-col-player">PLAYER</span>
-                            <span class="lb-col-rating">RATING</span>
-                            <span class="lb-col-win">WIN%</span>
+                            <span class="lb-col-rating">SCORE</span>
+                            <span class="lb-col-win">GAMES</span>
+                            <span class="lb-col-percentage">WIN%</span>
+                            <span class="lb-col-change">CHANGE</span>
                         </div>
                         <div class="lb-body" id="leaderboard-body">
                             <!-- Injected via app.js -->
                         </div>
                     </div>
+                    <div class="lb-pagination">
+                        <span id="leaderboard-page-status" aria-live="polite"></span>
+                        <div>
+                            <button class="neon-btn secondary-btn" id="leaderboard-prev" disabled>Previous</button>
+                            <button class="neon-btn secondary-btn" id="leaderboard-next" disabled>Next</button>
+                        </div>
+                    </div>
+                    <section class="lb-public-profile hidden" id="leaderboard-public-profile" aria-live="polite">
+                        <button class="mini-action-btn" id="leaderboard-profile-close" type="button">Close profile</button>
+                        <div id="leaderboard-profile-content"></div>
+                    </section>
                 </div>
             </section>
 

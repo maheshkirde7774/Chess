@@ -276,7 +276,8 @@ cd android
 | `GET` | `/api/profile` | Read the authenticated profile, ratings, stats, level, and achievements |
 | `PATCH` | `/api/profile` | Update the authenticated profile username or preset avatar |
 | `GET` | `/api/profile/matches` | Read authenticated match history; optional `game_mode` and `result` filters |
-| `GET` | `/api/leaderboard?game_mode=classic` | Public Classic or Four-Player profile ratings |
+| `GET` | `/api/leaderboard?game_mode=four_player&category=rating&period=all_time` | Public paginated leaderboard; supports `game_mode` (`classic`, `four_player`, `all`), `category` (`rating`, `wins`, `streak`, `xp`, `weekly`, `monthly`), `period`, `search`, `offset`, and `limit`; optional profile bearer auth adds the current player's rank and nearby players |
+| `GET` | `/api/players/{username}` | Public profile fields and recent verified matches; excludes suspended/deleted profiles |
 | `POST` | `/classic/rooms` | Create a local or online classic 1v1 match |
 | `POST` | `/classic/rooms/join` | Join an available classic match as Black |
 | `POST` | `/classic/rooms/{code}/start` | Start a full Classic room as its host |
@@ -286,6 +287,8 @@ cd android
 | `GET` | `/classic/rooms/{code}` | Retrieve authorized classic state with `Authorization: Bearer <player_id>` |
 
 ### WebSocket Frame Specification (`/ws/{room_code}`)
+
+Leaderboard ratings use the existing server-updated Classic Elo and separate Four-Player rating fields. Rankings sort descending by the selected score, then by wins, then by case-insensitive username for deterministic ties. Weekly and monthly rankings use XP awarded for verified completed matches from the current UTC week (Monday start) or calendar month; the selected game mode limits those matches. Unfinished games do not appear in match records. Public ranking queries exclude suspended and soft-deleted profiles, and completed matches invalidate the short-lived leaderboard cache.
 
 ```json
 // Outgoing Move Frame (Client -> Server)

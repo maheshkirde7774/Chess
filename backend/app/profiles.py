@@ -4,12 +4,14 @@ import hashlib
 import json
 import re
 import secrets
+import threading
+import time
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 import chess
-from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import case, func
 from sqlalchemy.exc import IntegrityError
@@ -25,6 +27,9 @@ from app.db import (
 from app.room_limits import enforce_room_rate_limit
 
 router = APIRouter()
+_leaderboard_cache: dict[tuple[Any, ...], tuple[float, dict[str, Any]]] = {}
+_leaderboard_cache_lock = threading.Lock()
+LEADERBOARD_CACHE_SECONDS = 30
 
 AVATARS = {"king", "queen", "rook", "bishop", "knight", "pawn"}
 PIECE_VALUES = {
@@ -61,7 +66,14 @@ def _authenticated_profile(
     ).first()
     if profile is None:
         raise HTTPException(status_code=401, detail="Invalid profile credential")
+    if profile.is_suspended or profile.deleted_at is not None:
+        raise HTTPException(status_code=403, detail="This profile is unavailable")
     return profile
+
+
+def _invalidate_leaderboard_cache() -> None:
+    with _leaderboard_cache_lock:
+        _leaderboard_cache.clear()
 
 
 def profile_from_authorization(authorization: Optional[str], db: Session) -> Optional[PlayerProfileModel]:
@@ -148,6 +160,7 @@ def create_device_profile(
     except IntegrityError:
         db.rollback()
         raise HTTPException(status_code=503, detail="Could not create a unique profile; please retry")
+    _invalidate_leaderboard_cache()
     return {"access_token": token, "profile": _profile_payload(db, profile)}
 
 
@@ -192,6 +205,7 @@ def update_profile(
         db.rollback()
         raise HTTPException(status_code=409, detail="That username is already taken")
     db.refresh(profile)
+    _invalidate_leaderboard_cache()
     return _profile_payload(db, profile)
 
 
@@ -234,38 +248,218 @@ def profile_matches(
 
 
 @router.get("/api/leaderboard")
-def leaderboard(game_mode: str = "classic", db: Session = Depends(get_db)):
-    if game_mode not in {"classic", "four_player"}:
+def leaderboard(
+    game_mode: str = "four_player",
+    category: str = "rating",
+    period: str = "all_time",
+    search: Optional[str] = Query(default=None, max_length=24),
+    offset: int = Query(default=0, ge=0, le=100_000),
+    limit: int = Query(default=50, ge=1, le=100),
+    authorization: Optional[str] = Header(default=None),
+    db: Session = Depends(get_db),
+):
+    """Rank verified profiles; rows are deterministic and never accept client ratings."""
+    valid_modes = {"four_player", "classic", "all"}
+    valid_categories = {"rating", "wins", "streak", "xp", "weekly", "monthly"}
+    if game_mode not in valid_modes:
         raise HTTPException(status_code=422, detail="Unsupported leaderboard mode")
-    rating_column = (
-        PlayerProfileModel.classic_rating
-        if game_mode == "classic"
-        else PlayerProfileModel.four_player_rating
+    if category not in valid_categories:
+        raise HTTPException(status_code=422, detail="Unsupported leaderboard category")
+    if period not in {"all_time", "weekly", "monthly"}:
+        raise HTTPException(status_code=422, detail="Unsupported leaderboard period")
+    if category in {"weekly", "monthly"}:
+        period = category
+    elif period != "all_time":
+        category = period
+    if category == "rating" and game_mode == "all":
+        raise HTTPException(status_code=422, detail="Rating rankings require a specific game mode")
+    if search is not None and not search.strip():
+        search = None
+
+    current_profile = _authenticated_profile(authorization, db) if authorization else None
+    cache_key = (
+        game_mode, category, period, search.casefold() if search else None,
+        offset, limit, current_profile.id if current_profile else None,
     )
-    stats = db.query(
-        PlayerMatchModel.profile_id,
+    now = time.monotonic()
+    with _leaderboard_cache_lock:
+        cached = _leaderboard_cache.get(cache_key)
+        if cached and now - cached[0] < LEADERBOARD_CACHE_SECONDS:
+            return cached[1]
+
+    cutoff: Optional[datetime] = None
+    if period == "weekly":
+        current_date = datetime.now(timezone.utc).date()
+        cutoff_date = current_date - timedelta(days=current_date.weekday())
+        cutoff = datetime.combine(cutoff_date, datetime.min.time(), timezone.utc)
+    elif period == "monthly":
+        current_date = datetime.now(timezone.utc).date()
+        cutoff = datetime(current_date.year, current_date.month, 1, tzinfo=timezone.utc)
+
+    match_query = db.query(
+        PlayerMatchModel.profile_id.label("profile_id"),
         func.count(PlayerMatchModel.id).label("games"),
         func.coalesce(func.sum(case((PlayerMatchModel.result == "win", 1), else_=0)), 0).label("wins"),
-    ).join(MatchRecordModel, PlayerMatchModel.match_id == MatchRecordModel.match_id).filter(
-        MatchRecordModel.game_mode == game_mode,
-        MatchRecordModel.is_rated.is_(True),
-    ).group_by(PlayerMatchModel.profile_id).subquery()
-    rows = db.query(
-        PlayerProfileModel, stats.c.games, stats.c.wins
-    ).join(stats, stats.c.profile_id == PlayerProfileModel.id).order_by(
-        rating_column.desc(), PlayerProfileModel.created_at.asc()
-    ).limit(100).all()
-    return [
-        {
-            "rank": rank,
-            "username": profile.username,
-            "avatar": profile.avatar,
-            "rating": getattr(profile, "classic_rating" if game_mode == "classic" else "four_player_rating"),
+        func.coalesce(func.sum(PlayerMatchModel.xp_awarded), 0).label("xp"),
+        func.coalesce(
+            func.sum(case((MatchRecordModel.is_rated.is_(True), 1), else_=0)), 0
+        ).label("rated_games"),
+        func.coalesce(func.sum(PlayerMatchModel.rating_delta), 0).label("rating_delta"),
+    ).join(MatchRecordModel, PlayerMatchModel.match_id == MatchRecordModel.match_id)
+    if game_mode != "all":
+        match_query = match_query.filter(MatchRecordModel.game_mode == game_mode)
+    if cutoff is not None:
+        match_query = match_query.filter(MatchRecordModel.completed_at >= cutoff)
+    stats = match_query.group_by(PlayerMatchModel.profile_id).subquery()
+
+    rating_column = (
+        PlayerProfileModel.classic_rating if game_mode == "classic"
+        else PlayerProfileModel.four_player_rating
+    )
+    games = func.coalesce(stats.c.games, 0)
+    wins = func.coalesce(stats.c.wins, 0)
+    xp = func.coalesce(stats.c.xp, 0)
+    rated_games = func.coalesce(stats.c.rated_games, 0)
+    rating_delta = func.coalesce(stats.c.rating_delta, 0)
+    tie_wins = wins
+    if category == "rating":
+        score = rating_column
+    elif category == "wins":
+        score = wins
+    elif category == "streak":
+        score = PlayerProfileModel.best_streak
+    else:
+        score = xp
+    ranked_query = db.query(
+        PlayerProfileModel.id.label("profile_id"),
+        PlayerProfileModel.username.label("username"),
+        PlayerProfileModel.username_key.label("username_key"),
+        PlayerProfileModel.avatar.label("avatar"),
+        rating_column.label("rating"),
+        score.label("score"),
+        games.label("games"),
+        wins.label("wins"),
+        xp.label("xp"),
+        rating_delta.label("rating_delta"),
+        func.round(
+            wins * 100.0 / func.nullif(games, 0), 1
+        ).label("win_percentage"),
+    ).outerjoin(stats, stats.c.profile_id == PlayerProfileModel.id).filter(
+        PlayerProfileModel.is_suspended.is_(False),
+        PlayerProfileModel.deleted_at.is_(None),
+    )
+    if category == "rating":
+        ranked_query = ranked_query.filter(rated_games > 0)
+    if period != "all_time":
+        ranked_query = ranked_query.filter(stats.c.profile_id.is_not(None))
+    ranked = ranked_query.add_columns(
+        func.row_number().over(
+            order_by=(score.desc(), tie_wins.desc(), PlayerProfileModel.username_key.asc())
+        ).label("rank")
+    ).subquery()
+    filtered = db.query(ranked)
+    if search:
+        escaped = search.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        filtered = filtered.filter(ranked.c.username.ilike(f"%{escaped}%", escape="\\"))
+    total = filtered.count()
+    entries = filtered.order_by(ranked.c.rank).offset(offset).limit(limit).all()
+    podium = db.query(ranked).filter(ranked.c.rank <= 3).order_by(ranked.c.rank).all()
+
+    def serialize(row: Any) -> dict[str, Any]:
+        values = row._mapping
+        games = values["games"] or 0
+        wins = values["wins"] or 0
+        return {
+            "rank": values["rank"],
+            "username": values["username"],
+            "avatar": values["avatar"],
+            "rating": values["rating"],
+            "score": values["score"],
+            "rating_change": values["rating_delta"] if period != "all_time" else values["rating"] - 1200,
             "games": games,
-            "win_percentage": round(wins * 100 / games, 1) if games else 0,
+            "wins": wins,
+            "win_percentage": float(values["win_percentage"] or 0),
         }
-        for rank, (profile, games, wins) in enumerate(rows, start=1)
-    ]
+
+    current_position = None
+    if current_profile:
+        current_row = db.query(ranked).filter(ranked.c.profile_id == current_profile.id).first()
+        if current_row:
+            rank = current_row._mapping["rank"]
+            neighbors = db.query(ranked).filter(
+                ranked.c.rank.between(max(1, rank - 2), rank + 2)
+            ).order_by(ranked.c.rank).all()
+            current_position = {
+                "rank": rank,
+                "player": serialize(current_row),
+                "neighbors": [serialize(row) for row in neighbors],
+            }
+    response = {
+        "game_mode": game_mode,
+        "category": category,
+        "period": period,
+        "entries": [serialize(row) for row in entries],
+        "podium": [serialize(row) for row in podium],
+        "total": total,
+        "offset": offset,
+        "limit": limit,
+        "current_player": current_position,
+    }
+    with _leaderboard_cache_lock:
+        _leaderboard_cache[cache_key] = (time.monotonic(), response)
+        if len(_leaderboard_cache) > 256:
+            expired = [
+                key for key, (cached_at, _) in _leaderboard_cache.items()
+                if time.monotonic() - cached_at >= LEADERBOARD_CACHE_SECONDS
+            ]
+            for key in expired:
+                _leaderboard_cache.pop(key, None)
+    return response
+
+
+@router.get("/api/players/{username}")
+def public_profile(username: str, db: Session = Depends(get_db)):
+    if len(username) > 24:
+        raise HTTPException(status_code=404, detail="Player not found")
+    profile = db.query(PlayerProfileModel).filter(
+        PlayerProfileModel.username_key == username.casefold(),
+        PlayerProfileModel.is_suspended.is_(False),
+        PlayerProfileModel.deleted_at.is_(None),
+    ).first()
+    if profile is None:
+        raise HTTPException(status_code=404, detail="Player not found")
+    total, wins = db.query(
+        func.count(PlayerMatchModel.id),
+        func.coalesce(func.sum(case((PlayerMatchModel.result == "win", 1), else_=0)), 0),
+    ).filter(PlayerMatchModel.profile_id == profile.id).one()
+    matches = db.query(PlayerMatchModel, MatchRecordModel).join(
+        MatchRecordModel, PlayerMatchModel.match_id == MatchRecordModel.match_id
+    ).filter(PlayerMatchModel.profile_id == profile.id).order_by(
+        MatchRecordModel.completed_at.desc()
+    ).limit(10).all()
+    return {
+        "username": profile.username,
+        "avatar": profile.avatar,
+        "level": _level_progress(profile.xp)["level"],
+        "xp": profile.xp,
+        "ratings": {
+            "classic": profile.classic_rating,
+            "four_player": profile.four_player_rating,
+        },
+        "games": total,
+        "wins": wins,
+        "win_percentage": round(wins * 100 / total, 1) if total else 0,
+        "best_streak": profile.best_streak,
+        "recent_matches": [
+            {
+                "game_mode": match.game_mode,
+                "result": player_match.result,
+                "opponents": json.loads(player_match.opponent_names_json),
+                "completed_at": match.completed_at.isoformat(),
+            }
+            for player_match, match in matches
+        ],
+    }
 
 
 def classic_comeback(moves: list[dict[str, str]], winner: str) -> bool:
@@ -385,6 +579,7 @@ def record_completed_match(
     ))
     if not linked:
         db.commit()
+        _invalidate_leaderboard_cache()
         return True
 
     original_ratings = {
@@ -453,4 +648,5 @@ def record_completed_match(
         if db.query(MatchRecordModel.id).filter(MatchRecordModel.match_id == match_id).first():
             return False
         raise
+    _invalidate_leaderboard_cache()
     return True

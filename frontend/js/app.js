@@ -1100,14 +1100,55 @@ class QuadChessApp {
     initLeaderboardData() {
         const container = document.getElementById("leaderboard-body");
         if (!container) return;
-        document.querySelectorAll(".lb-tab").forEach(button => {
+        this.leaderboardFilters = {
+            gameMode: "four_player",
+            period: "all_time",
+            category: "rating",
+            offset: 0,
+            limit: 25,
+        };
+        document.querySelectorAll("[data-lb-mode]").forEach(button => {
             button.addEventListener("click", () => {
-                document.querySelectorAll(".lb-tab").forEach(tab => tab.classList.remove("active"));
-                button.classList.add("active");
-                this.loadLeaderboard(button.dataset.tab || "classic");
+                document.querySelectorAll("[data-lb-mode]").forEach(tab => tab.classList.toggle("active", tab === button));
+                this.leaderboardFilters.gameMode = button.dataset.lbMode;
+                this.leaderboardFilters.offset = 0;
+                this.loadLeaderboard();
             });
         });
-        this.loadLeaderboard("classic");
+        document.querySelectorAll("[data-lb-period]").forEach(button => {
+            button.addEventListener("click", () => {
+                document.querySelectorAll("[data-lb-period]").forEach(tab => tab.classList.toggle("active", tab === button));
+                this.leaderboardFilters.period = button.dataset.lbPeriod;
+                this.leaderboardFilters.offset = 0;
+                const category = document.getElementById("leaderboard-category");
+                if (category) category.disabled = this.leaderboardFilters.period !== "all_time";
+                this.loadLeaderboard();
+            });
+        });
+        document.getElementById("leaderboard-category")?.addEventListener("change", (event) => {
+            this.leaderboardFilters.category = event.target.value;
+            this.leaderboardFilters.offset = 0;
+            this.loadLeaderboard();
+        });
+        document.getElementById("leaderboard-search")?.addEventListener("input", () => {
+            clearTimeout(this.leaderboardSearchTimeout);
+            this.leaderboardSearchTimeout = setTimeout(() => {
+                this.leaderboardFilters.offset = 0;
+                this.loadLeaderboard();
+            }, 250);
+        });
+        document.getElementById("leaderboard-prev")?.addEventListener("click", () => {
+            this.leaderboardFilters.offset = Math.max(0, this.leaderboardFilters.offset - this.leaderboardFilters.limit);
+            this.loadLeaderboard();
+        });
+        document.getElementById("leaderboard-next")?.addEventListener("click", () => {
+            this.leaderboardFilters.offset += this.leaderboardFilters.limit;
+            this.loadLeaderboard();
+        });
+        document.getElementById("leaderboard-profile-close")?.addEventListener("click", () => {
+            document.getElementById("leaderboard-public-profile")?.classList.add("hidden");
+        });
+        this.loadLeaderboard();
 
         // Companion invites list
         const friendsContainer = document.getElementById("friends-list-container");
@@ -1121,52 +1162,149 @@ class QuadChessApp {
         }
     }
 
-    async loadLeaderboard(gameMode) {
+    async loadLeaderboard() {
         const container = document.getElementById("leaderboard-body");
         if (!container) return;
+        const filters = this.leaderboardFilters;
         container.replaceChildren();
         try {
+            const params = new URLSearchParams({
+                game_mode: filters.gameMode,
+                category: filters.category,
+                period: filters.period,
+                offset: String(filters.offset),
+                limit: String(filters.limit),
+            });
+            const search = document.getElementById("leaderboard-search")?.value.trim();
+            if (search) params.set("search", search);
+            await window.FOURXProfile?.ready;
             const response = await fetch(
-                `${window.CONFIG.getServerUrl()}/api/leaderboard?game_mode=${encodeURIComponent(gameMode)}`
+                `${window.CONFIG.getServerUrl()}/api/leaderboard?${params}`,
+                { headers: window.FOURXProfile?.authHeaders() || {} }
             );
             const leaders = await response.json();
             if (!response.ok) throw new Error(leaders.detail || "Leaderboard unavailable");
-            if (leaders.length === 0) {
+            this.renderLeaderboardPodium(leaders.podium || []);
+            this.renderLeaderboardCurrent(leaders.current_player);
+            if (!leaders.entries?.length) {
                 const empty = document.createElement("p");
                 empty.className = "profile-empty";
-                empty.textContent = "No rated profiles yet. Complete rated online matches to appear here.";
+                empty.textContent = "No players match this ranking yet. Complete online matches to appear here.";
                 container.append(empty);
-                return;
+            } else {
+                leaders.entries.forEach(leader => container.append(this.createLeaderboardRow(leader)));
             }
-            const icons = { king: "♔", queen: "♕", rook: "♖", bishop: "♗", knight: "♘", pawn: "♙" };
-            leaders.forEach((leader, index) => {
-                const row = document.createElement("div");
-                row.className = "lb-row";
-                const rank = document.createElement("span");
-                rank.className = `lb-rank ${["gold", "silver", "bronze"][index] || ""}`;
-                rank.textContent = `#${leader.rank}`;
-                const player = document.createElement("div");
-                player.className = "lb-player";
-                const avatar = document.createElement("div");
-                avatar.className = "lb-avatar";
-                avatar.textContent = icons[leader.avatar] || "♘";
-                const name = document.createElement("span");
-                name.textContent = leader.username;
-                player.append(avatar, name);
-                const rating = document.createElement("span");
-                rating.className = "lb-rating";
-                rating.textContent = leader.rating;
-                const win = document.createElement("span");
-                win.className = "lb-win";
-                win.textContent = `${leader.win_percentage}%`;
-                row.append(rank, player, rating, win);
-                container.append(row);
-            });
+            const start = leaders.total ? filters.offset + 1 : 0;
+            const end = Math.min(filters.offset + leaders.entries.length, leaders.total);
+            const status = document.getElementById("leaderboard-page-status");
+            if (status) status.textContent = `${start}-${end} of ${leaders.total} players`;
+            const previous = document.getElementById("leaderboard-prev");
+            const next = document.getElementById("leaderboard-next");
+            if (previous) previous.disabled = filters.offset === 0;
+            if (next) next.disabled = filters.offset + leaders.entries.length >= leaders.total;
         } catch (error) {
             const notice = document.createElement("p");
             notice.className = "profile-empty error";
             notice.textContent = `Leaderboard unavailable: ${error.message}`;
             container.append(notice);
+        }
+    }
+
+    createLeaderboardRow(leader) {
+        const row = document.createElement("div");
+        row.className = "lb-row";
+        const rank = document.createElement("span");
+        rank.className = `lb-rank ${leader.rank <= 3 ? ["gold", "silver", "bronze"][leader.rank - 1] : ""}`;
+        rank.textContent = `#${leader.rank}`;
+        const player = document.createElement("div");
+        player.className = "lb-player";
+        const icons = { king: "♔", queen: "♕", rook: "♖", bishop: "♗", knight: "♘", pawn: "♙" };
+        const avatar = document.createElement("span");
+        avatar.className = "lb-avatar";
+        avatar.textContent = icons[leader.avatar] || "♘";
+        const view = document.createElement("button");
+        view.type = "button";
+        view.className = "lb-profile-link";
+        view.textContent = leader.username;
+        view.addEventListener("click", () => this.loadPublicProfile(leader.username));
+        player.append(avatar, view);
+        const score = document.createElement("span");
+        score.className = "lb-rating";
+        score.textContent = this.leaderboardFilters.category === "rating"
+            && this.leaderboardFilters.period === "all_time"
+            ? String(leader.rating)
+            : String(leader.score);
+        const games = document.createElement("span");
+        games.textContent = String(leader.games);
+        const win = document.createElement("span");
+        win.className = "lb-win";
+        win.textContent = `${leader.win_percentage}%`;
+        const change = document.createElement("span");
+        change.className = leader.rating_change > 0 ? "lb-change positive" : leader.rating_change < 0 ? "lb-change negative" : "lb-change";
+        change.textContent = `${leader.rating_change > 0 ? "+" : ""}${leader.rating_change}`;
+        row.append(rank, player, score, games, win, change);
+        return row;
+    }
+
+    renderLeaderboardPodium(players) {
+        const podium = document.getElementById("leaderboard-podium");
+        if (!podium) return;
+        podium.replaceChildren();
+        players.forEach(player => {
+            const card = document.createElement("button");
+            card.type = "button";
+            card.className = `lb-podium-card place-${player.rank}`;
+            card.addEventListener("click", () => this.loadPublicProfile(player.username));
+            const rank = document.createElement("span");
+            rank.className = "lb-podium-rank";
+            rank.textContent = `#${player.rank}`;
+            const name = document.createElement("strong");
+            name.textContent = player.username;
+            const score = document.createElement("span");
+            score.textContent = this.leaderboardFilters.category === "rating"
+                && this.leaderboardFilters.period === "all_time"
+                ? `${player.rating} rating`
+                : `${player.score} score`;
+            card.append(rank, name, score);
+            podium.append(card);
+        });
+    }
+
+    renderLeaderboardCurrent(current) {
+        const panel = document.getElementById("leaderboard-current");
+        if (!panel) return;
+        panel.replaceChildren();
+        panel.classList.toggle("hidden", !current);
+        if (!current) return;
+        const title = document.createElement("strong");
+        title.textContent = `Your global position: #${current.rank}`;
+        const neighbors = document.createElement("span");
+        neighbors.textContent = current.neighbors.map(player => `#${player.rank} ${player.username}`).join(" · ");
+        panel.append(title, neighbors);
+    }
+
+    async loadPublicProfile(username) {
+        const panel = document.getElementById("leaderboard-public-profile");
+        const content = document.getElementById("leaderboard-profile-content");
+        if (!panel || !content) return;
+        content.textContent = "Loading player profile…";
+        panel.classList.remove("hidden");
+        try {
+            const response = await fetch(
+                `${window.CONFIG.getServerUrl()}/api/players/${encodeURIComponent(username)}`
+            );
+            const profile = await response.json();
+            if (!response.ok) throw new Error(profile.detail || "Public profile unavailable");
+            content.replaceChildren();
+            const heading = document.createElement("h3");
+            heading.textContent = profile.username;
+            const details = document.createElement("p");
+            details.textContent = `Level ${profile.level} · ${profile.xp} XP · ${profile.games} games · ${profile.win_percentage}% wins`;
+            const ratings = document.createElement("p");
+            ratings.textContent = `Classic ${profile.ratings.classic} · Four-Player ${profile.ratings.four_player}`;
+            content.append(heading, details, ratings);
+        } catch (error) {
+            content.textContent = `Profile unavailable: ${error.message}`;
         }
     }
 

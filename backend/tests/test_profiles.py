@@ -1,5 +1,6 @@
 import uuid
 import secrets
+from urllib.parse import quote
 
 import pytest
 from fastapi.testclient import TestClient
@@ -146,8 +147,10 @@ def test_verified_classic_match_updates_elo_xp_history_and_is_idempotent(client)
     assert matches[0]["duration_seconds"] == 42
     assert matches[0]["moves"][0]["san"] == "e4"
     assert matches[0]["rated"] is True
-    leaders = client.get("/api/leaderboard?game_mode=classic").json()
-    assert any(row["username"] == profile_a["username"] for row in leaders)
+    leaders = client.get(
+        f"/api/leaderboard?game_mode=classic&search={quote(profile_a['username'])}"
+    ).json()
+    assert any(row["username"] == profile_a["username"] for row in leaders["entries"])
 
     with SessionLocal() as db:
         assert db.query(MatchRecordModel).filter(MatchRecordModel.match_id == match_id).count() == 1
@@ -344,3 +347,93 @@ def test_four_player_authoritative_completion_records_rating_and_achievement(cli
     ).json()
     assert history[0]["result"] == "win"
     assert len(history[0]["opponents"]) == 3
+
+
+def test_leaderboard_categories_periods_search_pagination_and_current_player(client):
+    token_a, player_a = new_profile(client)
+    _token_b, player_b = new_profile(client)
+    match_id = str(uuid.uuid4())
+    with SessionLocal() as db:
+        record_completed_match(
+            db,
+            match_id=match_id,
+            room_code="LBTEST",
+            game_mode="classic",
+            started_at=None,
+            moves=[],
+            participants=[
+                {"profile_id": player_a["id"], "username": player_a["username"], "role": "white"},
+                {"profile_id": player_b["id"], "username": player_b["username"], "role": "black"},
+            ],
+            winner_profile_id=player_a["id"],
+            is_draw=False,
+            duration_seconds=30,
+            rated=True,
+        )
+        record_completed_match(
+            db,
+            match_id=str(uuid.uuid4()),
+            room_code="LBTEST",
+            game_mode="four_player",
+            started_at=None,
+            moves=[],
+            participants=[
+                {"profile_id": player_a["id"], "username": player_a["username"], "role": 1},
+                {"profile_id": player_b["id"], "username": player_b["username"], "role": 2},
+            ],
+            winner_profile_id=player_a["id"],
+            is_draw=False,
+            duration_seconds=30,
+            rated=True,
+        )
+        player = db.query(PlayerProfileModel).filter_by(id=player_a["id"]).one()
+        player.classic_rating = 1000000000
+        player.four_player_rating = 900
+        db.commit()
+
+    url = f"/api/leaderboard?game_mode=classic&category=rating&search={quote(player_a['username'])}"
+    result = client.get(url, headers={"Authorization": f"Bearer {token_a}"})
+    assert result.status_code == 200
+    data = result.json()
+    assert data["total"] == 1
+    assert data["entries"][0]["rank"] == data["current_player"]["rank"]
+    assert data["entries"][0]["rating"] == 1000000000
+    assert data["current_player"]["player"]["username"] == player_a["username"]
+
+    mode_separated = client.get(
+        f"/api/leaderboard?game_mode=four_player&category=rating&search={quote(player_a['username'])}"
+    ).json()
+    assert mode_separated["entries"][0]["rating"] == 900
+    assert client.get(
+        f"/api/leaderboard?game_mode=classic&category=weekly&search={quote(player_a['username'])}"
+    ).json()["entries"][0]["score"] == 25
+    assert client.get(
+        f"/api/leaderboard?game_mode=classic&category=monthly&search={quote(player_a['username'])}"
+    ).json()["entries"][0]["score"] == 25
+    assert client.get(
+        f"/api/leaderboard?game_mode=classic&category=wins&search={quote(player_a['username'])}&limit=1"
+    ).json()["entries"][0]["wins"] == 1
+    assert client.get(
+        f"/api/leaderboard?game_mode=classic&category=rating&search={quote(player_a['username'])}&offset=1&limit=1"
+    ).json()["entries"] == []
+
+
+def test_leaderboard_excludes_invalid_profiles_and_public_profile_is_private_safe(client):
+    token, profile = new_profile(client)
+    with SessionLocal() as db:
+        invalid = db.query(PlayerProfileModel).filter_by(id=profile["id"]).one()
+        invalid.is_suspended = True
+        db.commit()
+
+    query = f"/api/leaderboard?category=xp&search={quote(profile['username'])}"
+    assert client.get(query).json()["entries"] == []
+    assert client.get("/api/profile", headers={"Authorization": f"Bearer {token}"}).status_code == 403
+    assert client.get(f"/api/players/{profile['username']}").status_code == 404
+
+    _token, public_player = new_profile(client)
+    public = client.get(f"/api/players/{public_player['username']}")
+    assert public.status_code == 200
+    assert public.json()["username"] == public_player["username"]
+    assert "id" not in public.json()
+    assert "token_hash" not in public.json()
+    assert client.get("/api/leaderboard", headers={"Authorization": "Bearer invalid"}).status_code == 401

@@ -4,7 +4,7 @@ SQLite Database Configuration and ORM Models for Neon Four Chess
 
 import os
 import datetime
-from sqlalchemy import Boolean, create_engine, Column, Integer, String, DateTime, Text, UniqueConstraint, inspect, text
+from sqlalchemy import Boolean, create_engine, Column, Integer, String, DateTime, Text, UniqueConstraint, Index, inspect, text
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -80,10 +80,16 @@ class PlayerProfileModel(Base):
     four_player_rating = Column(Integer, default=1200, nullable=False)
     current_streak = Column(Integer, default=0, nullable=False)
     best_streak = Column(Integer, default=0, nullable=False)
+    is_suspended = Column(Boolean, default=False, nullable=False)
+    deleted_at = Column(DateTime, nullable=True)
 
 
 class MatchRecordModel(Base):
     __tablename__ = "match_records"
+    __table_args__ = (
+        Index("ix_match_mode_completed", "game_mode", "completed_at"),
+        Index("ix_match_mode_rated", "game_mode", "is_rated"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     match_id = Column(String(36), unique=True, index=True, nullable=False)
@@ -156,6 +162,17 @@ def init_db():
             connection.execute(text(
                 "ALTER TABLE match_records ADD COLUMN is_rated BOOLEAN NOT NULL DEFAULT FALSE"
             ))
+    profile_columns = {column["name"] for column in inspect(engine).get_columns("player_profiles")}
+    if "is_suspended" not in profile_columns:
+        with engine.begin() as connection:
+            connection.execute(text(
+                "ALTER TABLE player_profiles ADD COLUMN is_suspended BOOLEAN NOT NULL DEFAULT FALSE"
+            ))
+    if "deleted_at" not in profile_columns:
+        with engine.begin() as connection:
+            connection.execute(text("ALTER TABLE player_profiles ADD COLUMN deleted_at DATETIME"))
+    for index in MatchRecordModel.__table__.indexes:
+        index.create(bind=engine, checkfirst=True)
 
 
 def get_db():
