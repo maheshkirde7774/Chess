@@ -58,6 +58,7 @@ class ClassicRoomModel(Base):
     players_json = Column(Text, default="{}")
     state_json = Column(Text, default="{}")
     is_private = Column(Boolean, default=True, nullable=False)
+    ai_config_json = Column(Text, default="{}")
 
 
 def init_db():
@@ -69,6 +70,9 @@ def init_db():
     if "is_private" not in {column["name"] for column in inspect(engine).get_columns("classic_rooms")}:
         with engine.begin() as connection:
             connection.execute(text("ALTER TABLE classic_rooms ADD COLUMN is_private BOOLEAN NOT NULL DEFAULT TRUE"))
+    if "ai_config_json" not in {column["name"] for column in inspect(engine).get_columns("classic_rooms")}:
+        with engine.begin() as connection:
+            connection.execute(text("ALTER TABLE classic_rooms ADD COLUMN ai_config_json TEXT NOT NULL DEFAULT '{}'"))
 
 
 def get_db():

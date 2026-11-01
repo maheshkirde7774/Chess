@@ -5,6 +5,7 @@ import json
 import logging
 import secrets
 import string
+import threading
 import time
 import uuid
 from typing import Any, Dict, Optional
@@ -17,6 +18,7 @@ from sqlalchemy.orm import Session
 from app.db import ClassicRoomModel, get_db
 from app.ws_manager import manager
 from app.room_limits import enforce_room_rate_limit
+from app.classic_ai import DIFFICULTIES, choose_move
 
 logger = logging.getLogger("classic_chess")
 router = APIRouter()
@@ -39,6 +41,8 @@ class CreateClassicRoomRequest(BaseModel):
     time_control: str = "10+0"
     mode: str = "online"
     is_private: bool = True
+    ai_difficulty: str = "intermediate"
+    human_side: str = "white"
 
 
 class JoinClassicRoomRequest(BaseModel):
@@ -226,6 +230,7 @@ def _runtime(db: Session, code: str) -> Optional[Dict[str, Any]]:
     try:
         players = json.loads(record.players_json or "{}")
         state = json.loads(record.state_json or "{}")
+        ai_config = json.loads(record.ai_config_json or "{}")
     except json.JSONDecodeError as error:
         logger.exception("Could not decode saved classic room %s", code)
         raise HTTPException(status_code=500, detail="Saved classic room data is invalid") from error
@@ -241,6 +246,10 @@ def _runtime(db: Session, code: str) -> Optional[Dict[str, Any]]:
         "players": players,
         "game": game,
         "is_private": record.is_private,
+        "ai": ai_config,
+        "ai_thinking": False,
+        "generation": 0,
+        "ai_cancel": threading.Event(),
     }
     classic_rooms[code] = room
     return room
@@ -258,6 +267,7 @@ def _persist(db: Session, code: str, room: Dict[str, Any]) -> None:
     record.status = room["status"]
     record.players_json = json.dumps(room["players"])
     record.state_json = json.dumps(room["game"].serialize())
+    record.ai_config_json = json.dumps(room.get("ai", {}))
     db.commit()
 
 
@@ -281,6 +291,8 @@ def _public_state(code: str, room: Dict[str, Any]) -> Dict[str, Any]:
             (side for side, player in room["players"].items() if player.get("host")),
             None,
         ),
+        "ai": room.get("ai", {}),
+        "ai_thinking": room.get("ai_thinking", False),
         "status": game_state["status"] if room["mode"] == "local" or len(room["players"]) == 2 else "WAITING",
         "players": _sanitize_players(room["players"]),
         "game_state": game_state,
@@ -289,6 +301,59 @@ def _public_state(code: str, room: Dict[str, Any]) -> Dict[str, Any]:
 
 def _player_side(players: Dict[str, Dict[str, Any]], player_id: str) -> Optional[str]:
     return next((side for side, player in players.items() if player["player_id"] == player_id), None)
+
+
+async def _run_ai_turn(code: str, room: Dict[str, Any], db: Session) -> None:
+    if room["mode"] != "ai" or room["game"].result:
+        return
+    ai_config = room["ai"]
+    ai_side = ai_config["ai_side"]
+    current_side = "white" if room["game"].board.turn else "black"
+    if current_side != ai_side:
+        return
+
+    generation = room["generation"]
+    cancel = room["ai_cancel"]
+    position = room["game"].board.copy(stack=True)
+    room["ai_thinking"] = True
+    await manager.broadcast_to_room(f"classic:{code}", {
+        "type": "AI_THINKING",
+        **_public_state(code, room),
+    })
+    move = await asyncio.to_thread(
+        choose_move,
+        position,
+        ai_config["difficulty"],
+        cancel,
+    )
+    if (
+        cancel.is_set()
+        or room.get("generation") != generation
+        or classic_rooms.get(code) is not room
+    ):
+        return
+
+    room["ai_thinking"] = False
+    room["game"]._check_end_conditions()
+    if room["game"].result:
+        cancel.set()
+    elif move is None:
+        if room["game"].board.can_claim_draw():
+            room["game"].claim_draw()
+    else:
+        room["game"].play(
+            chess.square_name(move.from_square),
+            chess.square_name(move.to_square),
+            chess.piece_symbol(move.promotion) if move.promotion else None,
+        )
+    if room["game"].result:
+        cancel.set()
+    _persist(db, code, room)
+    await manager.broadcast_to_room(f"classic:{code}", {
+        "type": "GAME_STATE",
+        "event": "AI_MOVE" if move else "AI_DRAW",
+        **_public_state(code, room),
+    })
 
 
 def _generate_code(db: Session) -> str:
@@ -310,41 +375,61 @@ def create_classic_room(
 ):
     enforce_room_rate_limit(http_request, "classic-create")
     mode = request.mode.strip().lower()
-    if mode not in {"online", "local"}:
-        raise HTTPException(status_code=422, detail="Mode must be local or online")
+    if mode not in {"online", "local", "ai"}:
+        raise HTTPException(status_code=422, detail="Mode must be local, online, or ai")
     control = request.time_control.strip().lower()
     if control not in TIME_CONTROLS:
         raise HTTPException(status_code=422, detail="Unsupported time control")
 
     code = _generate_code(db)
     white_id = str(uuid.uuid4())
+    if request.ai_difficulty not in DIFFICULTIES:
+        raise HTTPException(status_code=422, detail="Unsupported AI difficulty")
+    if request.human_side not in {"white", "black"}:
+        raise HTTPException(status_code=422, detail="Human side must be white or black")
     started = mode == "local"
+    game_active = mode in {"local", "ai"}
     game = ClassicGame(control, started)
+    ai_config = {}
     players = {
-        "white": {
-            "player_id": white_id,
-            "name": request.player_name.strip() or "White",
-            "connected": False,
-            "ready": True,
-            "host": True,
-        }
+        "white": {"player_id": white_id, "name": request.player_name.strip() or "White",
+                  "connected": False, "ready": True, "host": True}
     }
     if started:
         players["black"] = {"player_id": white_id, "name": "Black", "connected": False, "ready": True}
-    room = {"mode": mode, "time_control": control, "status": "PLAYING" if started else "WAITING",
-            "players": players, "game": game, "is_private": request.is_private}
+    if mode == "ai":
+        human_side = request.human_side
+        ai_side = "black" if human_side == "white" else "white"
+        ai_name = f"FOURX · {request.ai_difficulty.title()}"
+        human_id = str(uuid.uuid4())
+        players = {
+            human_side: {"player_id": human_id, "name": request.player_name.strip() or "Player",
+                         "connected": False, "ready": True, "host": True},
+            ai_side: {"player_id": f"ai:{code}", "name": ai_name,
+                      "connected": True, "ready": True, "host": False},
+        }
+        ai_config = {
+            "difficulty": request.ai_difficulty,
+            "human_side": human_side,
+            "ai_side": ai_side,
+        }
+        white_id = human_id
+    room = {"mode": mode, "time_control": control, "status": "PLAYING" if game_active else "WAITING",
+            "players": players, "game": game, "is_private": request.is_private,
+            "ai": ai_config, "ai_thinking": False, "generation": 0,
+            "ai_cancel": threading.Event()}
     classic_rooms[code] = room
     record = ClassicRoomModel(
         room_code=code, mode=mode, time_control=control, status=room["status"],
         players_json=json.dumps(players), state_json=json.dumps(game.serialize()),
-        is_private=request.is_private,
+        is_private=request.is_private, ai_config_json=json.dumps(ai_config),
     )
     db.add(record)
     db.commit()
     return {
         **_public_state(code, room),
         "player_id": white_id,
-        "your_side": "white",
+        "your_side": request.human_side if mode == "ai" else "white",
     }
 
 
@@ -398,6 +483,54 @@ async def start_classic_room(room_code: str, request: ClassicPlayerRequest, db: 
     _persist(db, code, room)
     await manager.broadcast_to_room(f"classic:{code}", {
         "type": "GAME_STATE", "event": "START_GAME", **_public_state(code, room),
+    })
+    return {"success": True, **_public_state(code, room)}
+
+
+@router.post("/classic/rooms/{room_code}/restart")
+async def restart_classic_room(room_code: str, request: ClassicPlayerRequest, db: Session = Depends(get_db)):
+    code = room_code.strip().upper()
+    room = _runtime(db, code)
+    if room is None:
+        raise HTTPException(status_code=404, detail="Classic room not found")
+    side = _player_side(room["players"], request.player_id)
+    if side is None or not room["players"][side].get("host"):
+        raise HTTPException(status_code=403, detail="Only the player can restart this match")
+    if room["mode"] not in {"local", "ai"}:
+        raise HTTPException(status_code=400, detail="Online rooms cannot be restarted here")
+
+    room["ai_cancel"].set()
+    room["generation"] += 1
+    room["ai_cancel"] = threading.Event()
+    room["game"] = ClassicGame(room["time_control"], started=True)
+    room["status"] = "PLAYING"
+    room["ai_thinking"] = False
+    _persist(db, code, room)
+    await manager.broadcast_to_room(f"classic:{code}", {
+        "type": "GAME_STATE", "event": "RESTART", **_public_state(code, room),
+    })
+    if room["mode"] == "ai" and room["ai"]["ai_side"] == "white":
+        await _run_ai_turn(code, room, db)
+    return {"success": True, **_public_state(code, room)}
+
+
+@router.post("/classic/rooms/{room_code}/resign")
+async def resign_classic_room(room_code: str, request: ClassicPlayerRequest, db: Session = Depends(get_db)):
+    code = room_code.strip().upper()
+    room = _runtime(db, code)
+    if room is None:
+        raise HTTPException(status_code=404, detail="Classic room not found")
+    side = _player_side(room["players"], request.player_id)
+    if side is None:
+        raise HTTPException(status_code=403, detail="Unauthorized player")
+    if room["mode"] != "ai" or room["status"] != "PLAYING":
+        raise HTTPException(status_code=400, detail="This endpoint is only for active AI games")
+    room["ai_cancel"].set()
+    room["ai_thinking"] = False
+    room["game"]._finish("0-1" if side == "white" else "1-0", "resignation")
+    _persist(db, code, room)
+    await manager.broadcast_to_room(f"classic:{code}", {
+        "type": "GAME_STATE", "event": "RESIGN", **_public_state(code, room),
     })
     return {"success": True, **_public_state(code, room)}
 
@@ -485,6 +618,9 @@ async def classic_websocket(
     manager_room = f"classic:{code}"
     await manager.connect(manager_room, player_id, websocket, accepted=True)
     room["players"][side]["connected"] = True
+    if room["mode"] == "ai" and room["game"].clock_started_at is None:
+        if any(value is not None for value in room["game"].clocks.values()):
+            room["game"].clock_started_at = time.time()
     _persist(db, code, room)
     await manager.send_personal_message(manager_room, player_id, {
         "type": "SYNC_STATE", "your_side": side, **_public_state(code, room),
@@ -492,6 +628,10 @@ async def classic_websocket(
     await manager.broadcast_to_room(manager_room, {
         "type": "PRESENCE_UPDATE", **_public_state(code, room),
     })
+    if room["mode"] == "ai" and room["ai"]["ai_side"] == (
+        "white" if room["game"].board.turn else "black"
+    ):
+        await _run_ai_turn(code, room, db)
     try:
         message_times: list[float] = []
         while True:
@@ -614,6 +754,8 @@ async def classic_websocket(
                 await manager.broadcast_to_room(manager_room, {
                     "type": "GAME_STATE", "event": message_type, **_public_state(code, room),
                 })
+                if message_type == "MOVE" and room["mode"] == "ai" and not room["game"].result:
+                    await _run_ai_turn(code, room, db)
             except PermissionError as error:
                 await manager.send_personal_message(manager_room, player_id, {
                     "type": "ERROR", "message": str(error),

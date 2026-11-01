@@ -8,6 +8,7 @@ class ClassicChessUI {
         this.roomStatus = "WAITING";
         this.state = null;
         this.players = {};
+        this.ai = {};
         this.selectedSquare = null;
         this.socket = null;
         this.socketEnabled = false;
@@ -67,6 +68,21 @@ class ClassicChessUI {
     }
 
     bindEvents() {
+        document.getElementById("classic-ai-open")?.addEventListener("click", () => {
+            this.app.hideAllModals();
+            this.app.showModal("classic-ai-modal");
+            this.updateAiDescription();
+        });
+        document.getElementById("classic-ai-form")?.addEventListener("submit", (event) => {
+            event.preventDefault();
+            this.startAiGame();
+        });
+        document.getElementById("classic-ai-difficulty")?.addEventListener("change", () => {
+            this.updateAiDescription();
+        });
+        document.getElementById("classic-restart")?.addEventListener("click", () => {
+            this.restartAiGame();
+        });
         document.getElementById("classic-start-local")?.addEventListener("click", () => {
             this.startRoom("local");
         });
@@ -96,7 +112,8 @@ class ClassicChessUI {
         });
         document.getElementById("classic-resign")?.addEventListener("click", () => {
             if (this.state?.status === "PLAYING" && confirm("Resign this classic match?")) {
-                this.send({ type: "RESIGN" });
+                if (this.mode === "ai") this.resignAiGame();
+                else this.send({ type: "RESIGN" });
             }
         });
         document.getElementById("classic-offer-draw")?.addEventListener("click", () => {
@@ -133,6 +150,66 @@ class ClassicChessUI {
 
     get playerName() {
         return document.getElementById("classic-player-name")?.value.trim() || "Player";
+    }
+
+    updateAiDescription() {
+        const descriptions = {
+            beginner: "A relaxed opponent with occasional imperfect choices.",
+            intermediate: "Looks ahead and values pieces and straightforward plans.",
+            advanced: "Searches deeper for positional gains and tactical replies.",
+            expert: "Uses the strongest, deepest bounded search available on this server.",
+        };
+        const level = document.getElementById("classic-ai-difficulty")?.value;
+        const description = document.getElementById("classic-ai-description");
+        if (description) description.textContent = descriptions[level] || "";
+    }
+
+    async startAiGame() {
+        try {
+            const data = await this.request("/classic/rooms", {
+                method: "POST",
+                body: JSON.stringify({
+                    player_name: this.playerName,
+                    time_control: document.getElementById("classic-ai-time-control")?.value || "10+0",
+                    mode: "ai",
+                    human_side: document.getElementById("classic-ai-side")?.value || "white",
+                    ai_difficulty: document.getElementById("classic-ai-difficulty")?.value || "intermediate",
+                }),
+            });
+            this.enterRoom(data, "ai");
+        } catch (error) {
+            this.app.showToast(error.message, true);
+        }
+    }
+
+    async restartAiGame() {
+        try {
+            const data = await this.request(
+                `/classic/rooms/${encodeURIComponent(this.roomCode)}/restart`,
+                {
+                    method: "POST",
+                    body: JSON.stringify({ player_id: this.playerId }),
+                }
+            );
+            this.render(data);
+            this.app.showToast("AI match restarted.");
+        } catch (error) {
+            this.app.showToast(error.message, true);
+        }
+    }
+
+    async resignAiGame() {
+        try {
+            await this.request(
+                `/classic/rooms/${encodeURIComponent(this.roomCode)}/resign`,
+                {
+                    method: "POST",
+                    body: JSON.stringify({ player_id: this.playerId }),
+                }
+            );
+        } catch (error) {
+            this.app.showToast(error.message, true);
+        }
     }
 
     async startRoom(mode) {
@@ -297,6 +374,14 @@ class ClassicChessUI {
         this.selectedSquare = null;
         if (!this.state) return;
         const status = data.status || this.state.status;
+        this.ai = data.ai || this.ai || {};
+        const thinking = data.ai_thinking === true;
+        document.getElementById("classic-ai-thinking")?.classList.toggle(
+            "hidden", this.mode !== "ai" || !thinking
+        );
+        document.getElementById("classic-restart")?.classList.toggle(
+            "hidden", this.mode !== "ai"
+        );
         const turnName = this.players[this.state.turn]?.name || this.state.turn;
         let label = status === "WAITING"
             ? (Object.keys(this.players).length === 2
@@ -325,6 +410,12 @@ class ClassicChessUI {
         }
         document.getElementById("classic-white-name").textContent = this.players.white?.name || "White";
         document.getElementById("classic-black-name").textContent = this.players.black?.name || "Waiting for player";
+        document.getElementById("classic-white-card").classList.toggle(
+            "ai-opponent", this.mode === "ai" && this.ai.ai_side === "white"
+        );
+        document.getElementById("classic-black-card").classList.toggle(
+            "ai-opponent", this.mode === "ai" && this.ai.ai_side === "black"
+        );
         document.getElementById("classic-white-card").classList.toggle("active", status === "PLAYING" && this.state.turn === "white");
         document.getElementById("classic-black-card").classList.toggle("active", status === "PLAYING" && this.state.turn === "black");
         const drawOffer = this.state.draw_offer;
@@ -332,10 +423,10 @@ class ClassicChessUI {
         document.getElementById("classic-draw-actions").classList.toggle("hidden", !incomingDraw);
         document.getElementById("classic-offer-draw").disabled =
             status !== "PLAYING" || Boolean(drawOffer) || !this.state.last_mover ||
-            (this.mode === "online" && this.state.last_mover !== this.mySide);
+            (this.mode !== "local" && this.state.last_mover !== this.mySide);
         document.getElementById("classic-claim-draw").disabled =
             status !== "PLAYING" || !this.state.can_claim_draw ||
-            (this.mode === "online" && this.state.turn !== this.mySide);
+            (this.mode !== "local" && this.state.turn !== this.mySide);
         document.getElementById("classic-resign").disabled = status !== "PLAYING";
         this.renderBoard();
         this.renderHistory();
@@ -397,7 +488,7 @@ class ClassicChessUI {
 
     selectSquare(square) {
         if (!this.state || this.state.status !== "PLAYING") return;
-        if (this.mode === "online" && this.mySide !== this.state.turn) return;
+        if (this.mode !== "local" && this.mySide !== this.state.turn) return;
         if (this.selectedSquare && this.state.legal_moves.some(move =>
             move.from === this.selectedSquare && move.to === square
         )) {

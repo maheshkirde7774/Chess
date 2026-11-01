@@ -25,7 +25,7 @@
 | Mode / System | Description |
 |---|---|
 | **⚔️ 14×14 Tournament Arena** | Authentic 160-square cross-shaped board with 3×3 corner voids, algebraic coordinate markings, and smooth piece translation animations. |
-| **♟ Classic Chess 1v1** | Standard 8×8 chess in local pass-and-play or online room-code matches, with authoritative legal moves, clocks, draw controls, and saved games. |
+| **♟ Classic Chess 1v1** | Standard 8×8 chess in local pass-and-play, online room-code, and server-side FOURX AI matches with authoritative legal moves, clocks, draw controls, and saved games. |
 | **🎨 Charcoal & Graphite Theme** | Minimalist dark aesthetic with subtle Cyan, Purple, Magenta, and Gold accents, realistic Staunton piece vectors, and dark slate squares. |
 | **🤖 Tactical AI Bots** | Full single-player vs AI mode with 3 intelligent bots and selectable tactical tiers: Novice (800), Club (1400), and Master (2000). |
 | **🤝 2v2 Team Alliance** | Team combat format: South (Cyan) & North (Lime) alliance battle West (Magenta) & East (Gold) with joint checkmate objectives. |
@@ -200,9 +200,11 @@ python backend/run.py
 
 ## Classic 1v1 Chess
 
-Choose **Classic Chess (1v1)** on the home screen to select local pass-and-play or online play. Online games use a six-character room code; the host starts once both seats are occupied. Public rooms appear in the room browser, while private rooms are invitation-only. The available clocks are 1+0, 3+0, 5+0, 10+0, 15+10, and unlimited. The server validates moves and keeps each match, its move history, and remaining clock time in the separate `classic_rooms` SQLite table. Threefold repetition and the fifty-move rule are claimable draws; automatic terminal draws are handled by the chess rules engine. Play vs AI is explicitly marked Coming Soon.
+Choose **Classic Chess (1v1)** on the home screen to select local pass-and-play or online play. Online games use a six-character room code; the host starts once both seats are occupied. Public rooms appear in the room browser, while private rooms are invitation-only. The available clocks are 1+0, 3+0, 5+0, 10+0, 15+10, and unlimited. The server validates moves and keeps each match, its move history, and remaining clock time in the separate `classic_rooms` SQLite table. Threefold repetition and the fifty-move rule are claimable draws; automatic terminal draws are handled by the chess rules engine.
 
-Classic mode uses separate `/classic/rooms` REST endpoints and `/ws/classic/{room_code}` WebSockets. Four-player rooms use `/rooms` and `/ws/{room_code}` and keep the original four-player engine. Four-player time-control selections are saved as room settings; authoritative four-player clocks are not yet implemented.
+Classic mode uses separate `/classic/rooms` REST endpoints and `/ws/classic/{room_code}` WebSockets. Choose **Play vs FOURX AI** for Beginner, Intermediate, Advanced, or Expert play, select White or Black, and use any supported Classic time control. The built-in AI runs server-side using bounded minimax with alpha-beta pruning, iterative deepening, material/positional evaluation, and difficulty-specific depth, node, and time limits. It uses the existing `python-chess` legal move generator and Classic game state, so no Stockfish executable or mobile binary is distributed. Search runs off the event loop, and cancellation is checked during search when a match is restarted or resigned.
+
+Four-player rooms use `/rooms` and `/ws/{room_code}` and keep the original four-player engine. Four-player time-control selections are saved as room settings; authoritative four-player clocks and Four-Player AI are not implemented.
 
 Both online modes provide a waiting lobby with room code copy/share, occupied and empty seats, presence/readiness, host start, and waiting-room leave. Share uses the native Web Share API when available and falls back to copying the room code. Player credentials are bearer secrets returned only to the matching player; they are excluded from room snapshots and broadcasts.
 
@@ -266,6 +268,8 @@ cd android
 | `POST` | `/classic/rooms/join` | Join an available classic match as Black |
 | `POST` | `/classic/rooms/{code}/start` | Start a full Classic room as its host |
 | `POST` | `/classic/rooms/{code}/leave` | Leave a waiting Classic room |
+| `POST` | `/classic/rooms/{code}/restart` | Restart an authorized local or AI Classic match |
+| `POST` | `/classic/rooms/{code}/resign` | Resign an authorized active AI match |
 | `GET` | `/classic/rooms/{code}` | Retrieve authorized classic state with `Authorization: Bearer <player_id>` |
 
 ### WebSocket Frame Specification (`/ws/{room_code}`)
@@ -309,7 +313,7 @@ All current backend tests, including the original four-player tests and the clas
 pytest backend/tests/ -v
 ```
 
-The current suite contains 28 tests and is run with `pytest backend/tests/ -v`.
+The backend suite includes Classic AI legality, difficulty-budget, side selection, timed moves, cancellation, and terminal-position tests. Run all tests, including the original four-player and multiplayer coverage, with `pytest backend/tests/ -v`.
 
 ---
 

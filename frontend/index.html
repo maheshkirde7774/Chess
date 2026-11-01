@@ -297,10 +297,15 @@
                         </div>
                     </div>
                     <div id="classic-status" class="classic-status" aria-live="polite">Choose a mode to begin</div>
+                    <div id="classic-ai-thinking" class="classic-ai-thinking hidden" role="status" aria-live="polite">
+                        <span class="ai-thinking-pulse"></span>
+                        <span>FOURX is thinking…</span>
+                    </div>
                     <div class="classic-lobby-controls">
                         <button id="classic-ready" class="neon-btn secondary-btn hidden">Ready</button>
                         <button id="classic-start-match" class="neon-btn primary-btn hidden" disabled>Start Match</button>
                         <button id="classic-leave-room" class="neon-btn secondary-btn hidden">Leave Room</button>
+                        <button id="classic-restart" class="neon-btn secondary-btn hidden">Restart AI Match</button>
                     </div>
                     <div class="classic-layout">
                         <div class="classic-board-column">
@@ -780,8 +785,46 @@
                     <label class="classic-form-label" for="classic-join-code">Join with room code</label>
                     <input id="classic-join-code" maxlength="6" placeholder="ABC234" autocomplete="off">
                     <button id="classic-join-online" class="neon-btn secondary-btn">Join online game</button>
-                    <button id="classic-ai-soon" class="neon-btn secondary-btn" type="button" disabled>Play vs AI — Coming Soon</button>
+                    <button id="classic-ai-open" class="neon-btn secondary-btn" type="button">Play vs FOURX AI</button>
                 </div>
+            </div>
+        </div>
+
+        <div id="classic-ai-modal" class="game-modal hidden">
+            <div class="modal-card">
+                <div class="modal-header">
+                    <h2>PLAY AGAINST FOURX</h2>
+                    <button class="modal-close-btn" type="button">✕</button>
+                </div>
+                <form id="classic-ai-form" class="modal-body">
+                    <div class="ai-brand-lockup">
+                        <img src="assets/fourx-wordmark.svg" alt="FOURX">
+                        <p>Choose your side and challenge the Classic chess opponent.</p>
+                    </div>
+                    <label class="classic-form-label" for="classic-ai-difficulty">AI difficulty</label>
+                    <select id="classic-ai-difficulty">
+                        <option value="beginner">Beginner — gentle moves for new players</option>
+                        <option value="intermediate" selected>Intermediate — material and basic plans</option>
+                        <option value="advanced">Advanced — deeper positional and tactical search</option>
+                        <option value="expert">Expert — deepest bounded search</option>
+                    </select>
+                    <p id="classic-ai-description" class="ai-difficulty-description" aria-live="polite"></p>
+                    <label class="classic-form-label" for="classic-ai-side">Play as</label>
+                    <select id="classic-ai-side">
+                        <option value="white">White — move first</option>
+                        <option value="black">Black — FOURX moves first</option>
+                    </select>
+                    <label class="classic-form-label" for="classic-ai-time-control">Time control</label>
+                    <select id="classic-ai-time-control">
+                        <option value="1+0">1+0 Bullet</option>
+                        <option value="3+0">3+0 Blitz</option>
+                        <option value="5+0">5+0 Blitz</option>
+                        <option value="10+0" selected>10+0 Rapid</option>
+                        <option value="15+10">15+10 Rapid</option>
+                        <option value="unlimited">Unlimited</option>
+                    </select>
+                    <button type="submit" class="neon-btn primary-btn">Start AI Match</button>
+                </form>
             </div>
         </div>
 

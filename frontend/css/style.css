@@ -2858,6 +2858,15 @@ button:focus-visible {
 .classic-lobby-controls { display: flex; justify-content: center; flex-wrap: wrap; gap: 10px; }
 .classic-lobby-controls button { min-height: 46px; min-width: 135px; }
 .classic-room-tag { display: flex; align-items: center; gap: 8px; }
+.ai-brand-lockup { display: grid; justify-items: center; gap: 10px; text-align: center; }
+.ai-brand-lockup img { width: min(250px, 85%); height: auto; }
+.ai-brand-lockup p,
+.ai-difficulty-description { color: var(--color-text-secondary); text-align: center; }
+.ai-difficulty-description { min-height: 2.8em; margin-top: -6px; font-size: 0.88rem; }
+.classic-ai-thinking { display: flex; align-items: center; justify-content: center; gap: 10px; min-height: 34px; color: var(--color-p1); font-weight: 700; }
+.ai-thinking-pulse { width: 10px; height: 10px; border-radius: 50%; background: var(--color-p1); box-shadow: 0 0 12px var(--color-p1); animation: aiPulse 0.8s ease-in-out infinite alternate; }
+.ai-opponent { border-color: var(--color-p1); }
+@keyframes aiPulse { to { opacity: 0.3; transform: scale(0.75); } }
 
 @media (max-width: 760px) {
     .classic-page { padding: 12px; }
