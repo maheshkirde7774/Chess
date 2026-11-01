@@ -16,7 +16,7 @@ def test_health_check(client):
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "online"
-    assert data["service"] == "Neon Four Chess"
+    assert data["service"] == "FOURX"
 
 def test_create_and_join_room_flow(client):
     # 1. Create Room (Player 1 - Cyan)

@@ -1,7 +1,7 @@
 {
   "name": "neon-four-chess",
   "version": "1.0.0",
-  "description": "Neon Four Chess - 4-Player Cyberpunk Chess Game with FastAPI Backend & Capacitor Android App",
+  "description": "FOURX - Four-player chess game with FastAPI backend and Capacitor Android app",
   "main": "frontend/index.html",
   "scripts": {
     "start": "python backend/run.py",

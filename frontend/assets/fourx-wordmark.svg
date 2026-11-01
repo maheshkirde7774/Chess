@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 148" role="img" aria-labelledby="title description">
+  <title id="title">FOURX</title>
+  <desc id="description">FOURX — FOUR PLAYERS. ONE BATTLE.</desc>
+  <defs>
+    <linearGradient id="northwest" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#57e5ff"/>
+      <stop offset="100%" stop-color="#23bedb"/>
+    </linearGradient>
+    <linearGradient id="northeast" x1="100%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#a88aff"/>
+      <stop offset="100%" stop-color="#7861e8"/>
+    </linearGradient>
+    <linearGradient id="southwest" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#ff70bd"/>
+      <stop offset="100%" stop-color="#dc459c"/>
+    </linearGradient>
+    <linearGradient id="southeast" x1="100%" y1="100%" x2="0%" y2="0%">
+      <stop offset="0%" stop-color="#f8c56d"/>
+      <stop offset="100%" stop-color="#dfa64b"/>
+    </linearGradient>
+    <linearGradient id="xword" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#60e4fb"/>
+      <stop offset="35%" stop-color="#a78bfa"/>
+      <stop offset="68%" stop-color="#f06cba"/>
+      <stop offset="100%" stop-color="#f5c46e"/>
+    </linearGradient>
+    <filter id="mark-glow" x="-35%" y="-35%" width="170%" height="170%">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <g transform="translate(10 10)">
+    <rect x="3" y="3" width="124" height="124" rx="29" fill="#121720" stroke="#303746" stroke-width="2"/>
+    <g fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" filter="url(#mark-glow)">
+      <path d="M64 64 28 28" stroke="url(#northwest)"/>
+      <path d="M64 64 100 28" stroke="url(#northeast)"/>
+      <path d="M64 64 28 100" stroke="url(#southwest)"/>
+      <path d="M64 64 100 100" stroke="url(#southeast)"/>
+    </g>
+    <path d="m16 27 12-12 12 12H16Zm72 0 12-12 12 12H88ZM16 101l12 12 12-12H16Zm72 0 12 12 12-12H88Z" fill="#f3f5fa"/>
+    <circle cx="64" cy="64" r="7" fill="#f5f7fb"/>
+    <circle cx="64" cy="64" r="13" fill="none" stroke="#f5f7fb" stroke-opacity=".35" stroke-width="1.5"/>
+  </g>
+  <text x="162" y="88" fill="#f5f7fb" font-family="Outfit, Arial, sans-serif" font-size="80" font-weight="800" letter-spacing="3">FOUR</text>
+  <text x="426" y="88" fill="url(#xword)" font-family="Outfit, Arial, sans-serif" font-size="80" font-weight="800" letter-spacing="1">X</text>
+  <path d="M165 105h386" stroke="#38404f" stroke-width="1.5"/>
+  <text x="167" y="132" fill="#bac3d1" font-family="Arial, sans-serif" font-size="17" font-weight="700" letter-spacing="4">FOUR PLAYERS. ONE BATTLE.</text>
+</svg>

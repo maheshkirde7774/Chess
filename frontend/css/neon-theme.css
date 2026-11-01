@@ -32,9 +32,9 @@
     --color-p2-muted: rgba(236, 72, 153, 0.15);
     --color-p2-border: rgba(236, 72, 153, 0.4);
 
-    --color-p3: #10b981;           /* Lime / North: Tournament Emerald */
-    --color-p3-muted: rgba(16, 185, 129, 0.15);
-    --color-p3-border: rgba(16, 185, 129, 0.4);
+    --color-p3: #a78bfa;           /* Purple / North: FOURX directional accent */
+    --color-p3-muted: rgba(167, 139, 250, 0.15);
+    --color-p3-border: rgba(167, 139, 250, 0.4);
 
     --color-p4: #f59e0b;           /* Gold / East: Champagne Amber */
     --color-p4-muted: rgba(245, 158, 11, 0.15);

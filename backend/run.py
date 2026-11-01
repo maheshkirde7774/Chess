@@ -1,6 +1,4 @@
-"""
-Convenience entry point to run Neon Four Chess backend.
-"""
+"""Convenience entry point to run the FOURX backend."""
 import os
 import sys
 import uvicorn
@@ -15,7 +13,7 @@ if __name__ == "__main__":
     port = int(os.getenv("PORT", "8000"))
     reload = os.getenv("RELOAD", "True").lower() == "true"
     print("\n=======================================================")
-    print("  NEON FOUR CHESS SERVER READY!")
+    print("  FOURX SERVER READY!")
     print(f"  Open in your web browser: http://localhost:{port}")
     print(f"  Or LAN / Mobile URL:      http://127.0.0.1:{port}")
     print("=======================================================\n")

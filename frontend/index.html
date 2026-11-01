@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#0d0e12">
-    <meta name="description" content="Neon Four Chess - Professional 4-Player Strategy Chess Platform">
-    <title>Neon Four Chess | 4-Player Strategy Arena</title>
+    <meta name="description" content="FOURX — FOUR PLAYERS. ONE BATTLE. A premium four-player chess arena.">
+    <title>FOURX | Four Players. One Battle.</title>
 
     <!-- Google Fonts for Modern Competitive Chess Typography -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -25,16 +25,7 @@
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
                 </button>
                 <div class="brand-container" id="nav-brand-logo">
-                    <div class="brand-emblem">
-                        <span class="emblem-facet p1"></span>
-                        <span class="emblem-facet p2"></span>
-                        <span class="emblem-facet p3"></span>
-                        <span class="emblem-facet p4"></span>
-                    </div>
-                    <div class="brand-text">
-                        <span class="brand-title">NEON FOUR CHESS</span>
-                        <span class="brand-badge">ARENA</span>
-                    </div>
+                    <img class="brand-wordmark" src="assets/fourx-wordmark.svg" alt="FOURX — FOUR PLAYERS. ONE BATTLE.">
                 </div>
             </div>
 
@@ -73,16 +64,7 @@
                     <!-- 1. Hero Branding & Showcase Header -->
                     <div class="home-hero-card">
                         <div class="hero-brand-row">
-                            <div class="hero-crest" aria-hidden="true">
-                                <span class="crest-facet p1"></span>
-                                <span class="crest-facet p2"></span>
-                                <span class="crest-facet p3"></span>
-                                <span class="crest-facet p4"></span>
-                            </div>
-                            <div class="hero-titles">
-                                <h1 class="hero-app-title">NEON FOUR CHESS</h1>
-                                <p class="hero-app-tagline">Four Armies. One Crown. Conquer the 14×14 Cross Arena.</p>
-                            </div>
+                            <img class="hero-wordmark" src="assets/fourx-wordmark.svg" alt="FOURX — FOUR PLAYERS. ONE BATTLE.">
                         </div>
 
                         <!-- Staunton Visual Showcase on Quadrant Pedestal -->
@@ -168,8 +150,8 @@
                             </div>
                         </button>
 
-                        <!-- 2. Classic Chess (1v1) - Coming Soon -->
-                        <button id="menu-item-classic-1v1" class="menu-card menu-card-soon" type="button">
+                        <!-- 2. Classic Chess (1v1) -->
+                        <button id="menu-item-classic-1v1" class="menu-card" type="button">
                             <div class="card-icon-slot icon-classic">
                                 <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
                                     <rect x="3" y="3" width="18" height="18" rx="2"/>
@@ -180,13 +162,11 @@
                             <div class="card-content">
                                 <div class="card-header-row">
                                     <span class="card-title">Classic Chess (1v1)</span>
-                                    <span class="card-badge badge-soon">COMING SOON</span>
+                                    <span class="card-badge badge-cyan">1V1 CLASSIC</span>
                                 </div>
-                                <p class="card-desc">Standard two-player 8×8 FIDE tournament chess between two grandmasters.</p>
+                                <p class="card-desc">Play standard 8×8 chess locally or online with a friend.</p>
                             </div>
-                            <div class="card-action-arrow card-lock-tag" title="In Development">
-                                🔒
-                            </div>
+                            <div class="card-action-arrow">→</div>
                         </button>
 
                         <!-- 3. Play with Friends -->
@@ -303,7 +283,60 @@
                 </div>
             </section>
 
-            <!-- VIEW 2: GAME ARENA SCREEN (FOUR-PLAYER CHESSBOARD) -->
+            <section id="view-classic" class="app-view">
+                <div class="classic-page">
+                    <div class="classic-heading">
+                        <div>
+                            <span class="classic-eyebrow">CLASSIC MATCH</span>
+                            <h1>1v1 Chess</h1>
+                        </div>
+                        <div id="classic-room-tag" class="classic-room-tag hidden">ROOM <strong id="classic-room-code"></strong></div>
+                    </div>
+                    <div id="classic-status" class="classic-status" aria-live="polite">Choose a mode to begin</div>
+                    <div class="classic-layout">
+                        <div class="classic-board-column">
+                            <div class="classic-player" id="classic-black-card">
+                                <div><span class="classic-side-label">BLACK</span><strong id="classic-black-name">Black</strong></div>
+                                <span class="classic-captured" id="classic-captured-black"></span>
+                                <time class="classic-clock" id="classic-clock-black">--:--</time>
+                            </div>
+                            <div id="classic-board" class="classic-board" role="grid" aria-label="Classic chessboard"></div>
+                            <div class="classic-player" id="classic-white-card">
+                                <div><span class="classic-side-label">WHITE</span><strong id="classic-white-name">White</strong></div>
+                                <span class="classic-captured" id="classic-captured-white"></span>
+                                <time class="classic-clock" id="classic-clock-white">--:--</time>
+                            </div>
+                        </div>
+                        <aside class="classic-side-panel">
+                            <div class="classic-history-panel">
+                                <h2>Move history</h2>
+                                <ol id="classic-move-history" class="classic-move-history"></ol>
+                            </div>
+                            <div id="classic-draw-actions" class="classic-draw-actions hidden">
+                                <span id="classic-draw-notice">Draw offer received</span>
+                                <button id="classic-accept-draw" class="classic-action-btn">Accept</button>
+                                <button id="classic-decline-draw" class="classic-action-btn">Decline</button>
+                            </div>
+                            <div class="classic-controls">
+                                <button id="classic-offer-draw" class="classic-action-btn">Offer draw</button>
+                                <button id="classic-claim-draw" class="classic-action-btn" disabled>Claim draw</button>
+                                <button id="classic-resign" class="classic-action-btn danger">Resign</button>
+                            </div>
+                            <button id="classic-back-home" class="classic-back-btn">Back to home</button>
+                        </aside>
+                    </div>
+                </div>
+                <div id="classic-result" class="classic-result hidden" role="dialog" aria-modal="true">
+                    <div class="classic-result-card">
+                        <span class="classic-eyebrow">MATCH COMPLETE</span>
+                        <h2 id="classic-result-title">Game over</h2>
+                        <p id="classic-result-detail"></p>
+                        <button id="classic-result-home" class="classic-action-btn">Back to home</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- VIEW 3: GAME ARENA SCREEN (FOUR-PLAYER CHESSBOARD) -->
             <section id="view-game" class="app-view">
                 
                 <!-- Compact Arena Header Subbar -->
@@ -715,6 +748,34 @@
         <!-- Toast Notifications Container -->
         <div id="toast-container"></div>
 
+        <div id="classic-menu-modal" class="game-modal hidden">
+            <div class="modal-card">
+                <div class="modal-header">
+                    <h2>CLASSIC 1V1 CHESS</h2>
+                    <button class="modal-close-btn" type="button">✕</button>
+                </div>
+                <div class="modal-body">
+                    <label class="classic-form-label" for="classic-player-name">Your name</label>
+                    <input id="classic-player-name" maxlength="30" value="Player 1" autocomplete="name">
+                    <label class="classic-form-label" for="classic-time-control">Time control</label>
+                    <select id="classic-time-control">
+                        <option value="1+0">1+0 Bullet</option>
+                        <option value="3+0">3+0 Blitz</option>
+                        <option value="5+0">5+0 Blitz</option>
+                        <option value="10+0" selected>10+0 Rapid</option>
+                        <option value="15+10">15+10 Rapid</option>
+                        <option value="unlimited">Unlimited</option>
+                    </select>
+                    <button id="classic-start-local" class="neon-btn primary-btn">Local 1v1</button>
+                    <button id="classic-create-online" class="neon-btn cyan-btn">Create online room</button>
+                    <label class="classic-form-label" for="classic-join-code">Join with room code</label>
+                    <input id="classic-join-code" maxlength="6" placeholder="ABC234" autocomplete="off">
+                    <button id="classic-join-online" class="neon-btn secondary-btn">Join online game</button>
+                    <button id="classic-ai-soon" class="neon-btn secondary-btn" type="button" disabled>Play vs AI — Coming Soon</button>
+                </div>
+            </div>
+        </div>
+
         <!-- ==================== TOURNAMENT MODALS ==================== -->
 
         <!-- 1. Main Menu Modal (Legacy compatibility) -->
@@ -753,24 +814,6 @@
                             <small>South & North allies vs West & East rivals</small>
                         </div>
                     </button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Classic 1v1 Chess Coming Soon Modal -->
-        <div id="coming-soon-modal" class="game-modal hidden">
-            <div class="modal-card coming-soon-card">
-                <div class="modal-header">
-                    <h2>CLASSIC CHESS (1v1)</h2>
-                    <button class="modal-close-btn">✕</button>
-                </div>
-                <div class="modal-body" style="text-align:center; padding: 24px 16px;">
-                    <div class="modal-badge-icon" style="font-size: 2.2rem; margin-bottom: 12px;">♟ vs ♙</div>
-                    <h3 style="margin-bottom: 8px; font-family: var(--font-heading); color: #fff;">Classic 1v1 in Development</h3>
-                    <p style="color: var(--color-text-secondary); font-size: 0.88rem; line-height: 1.5; margin-bottom: 20px;">
-                        Standard 8×8 two-player chess rules and matchmaking are being developed for a future update. For now, enjoy the four-player cross arena!
-                    </p>
-                    <button class="neon-btn primary-btn submit-btn modal-close-action-btn" type="button" style="width: 100%;">Understood</button>
                 </div>
             </div>
         </div>
@@ -1014,6 +1057,7 @@
     <script src="js/chess-engine-client.js"></script>
     <script src="js/ui.js"></script>
     <script src="js/ws-client.js"></script>
+    <script src="js/classic-chess.js"></script>
     <script src="js/app.js"></script>
 </body>
 </html>

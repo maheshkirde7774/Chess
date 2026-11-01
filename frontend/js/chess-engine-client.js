@@ -31,7 +31,7 @@ const PLAYER_GOLD = 4;
 const PLAYER_INFO = {
     [PLAYER_CYAN]: { name: "Cyan", side: "South", color: "#00f3ff", bg: "rgba(0, 243, 255, 0.15)" },
     [PLAYER_MAGENTA]: { name: "Magenta", side: "West", color: "#ff007f", bg: "rgba(255, 0, 127, 0.15)" },
-    [PLAYER_LIME]: { name: "Lime", side: "North", color: "#39ff14", bg: "rgba(57, 255, 20, 0.15)" },
+    [PLAYER_LIME]: { name: "Lime", side: "North", color: "#a78bfa", bg: "rgba(167, 139, 250, 0.15)" },
     [PLAYER_GOLD]: { name: "Gold", side: "East", color: "#ffd700", bg: "rgba(255, 215, 0, 0.15)" }
 };
 
@@ -787,4 +787,3 @@ window.ClientChessEngine = ClientChessEngine;
 window.PLAYER_INFO = PLAYER_INFO;
 window.FourPlayerAI = FourPlayerAI;
 window.PUZZLES_DATA = PUZZLES_DATA;
-

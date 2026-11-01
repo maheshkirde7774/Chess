@@ -24,6 +24,7 @@ class QuadChessApp {
         );
 
         this.ui = new window.ChessUI(this.engine, (move, isCapture) => this.onPlayerMove(move, isCapture));
+        this.classicChess = new window.ClassicChessUI(this);
 
         this.currentView = "view-home";
         this.initEventListeners();
@@ -108,7 +109,7 @@ class QuadChessApp {
             this.showModal("menu-modal");
         });
         document.getElementById("menu-item-classic-1v1")?.addEventListener("click", () => {
-            this.showModal("coming-soon-modal");
+            this.showModal("classic-menu-modal");
         });
         document.getElementById("menu-item-friends")?.addEventListener("click", () => {
             this.showModal("friends-lobby-modal");

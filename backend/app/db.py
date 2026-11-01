@@ -45,6 +45,19 @@ class GameHistoryModel(Base):
     moves_history_json = Column(Text, default="[]")
 
 
+class ClassicRoomModel(Base):
+    __tablename__ = "classic_rooms"
+
+    id = Column(Integer, primary_key=True, index=True)
+    room_code = Column(String(10), unique=True, index=True, nullable=False)
+    created_at = Column(DateTime, default=get_utc_now)
+    mode = Column(String(10), nullable=False)
+    time_control = Column(String(10), nullable=False)
+    status = Column(String(20), default="WAITING")
+    players_json = Column(Text, default="{}")
+    state_json = Column(Text, default="{}")
+
+
 def init_db():
     """Initializes tables in database."""
     Base.metadata.create_all(bind=engine)

@@ -45,7 +45,7 @@ PLAYER_NAMES = {
 PLAYER_COLORS = {
     PLAYER_CYAN: "#00f3ff",
     PLAYER_MAGENTA: "#ff007f",
-    PLAYER_LIME: "#39ff14",
+    PLAYER_LIME: "#a78bfa",
     PLAYER_GOLD: "#ffd700"
 }
 
@@ -874,4 +874,3 @@ class FourPlayerChessEngine:
             self.last_move = Move.from_dict(last_move_data)
         else:
             self.last_move = None
-

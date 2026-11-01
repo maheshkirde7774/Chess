@@ -1,6 +1,6 @@
 """
-Neon Four Chess - FastAPI Backend
-Provides REST endpoints, SQLite persistence, and WebSockets for real-time multiplayer 4-player chess.
+FOURX FastAPI backend
+Provides REST endpoints, SQLite persistence, and WebSockets for multiplayer chess.
 """
 
 import os
@@ -30,6 +30,7 @@ from app.models import (
     MoveRequest, ResignRequest, RoomStateResponse
 )
 from app.ws_manager import manager
+from app.classic import router as classic_router
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
@@ -114,11 +115,11 @@ async def lifespan(app: FastAPI):
     logger.info("Initializing SQLite database...")
     init_db()
     yield
-    logger.info("Shutting down Neon Four Chess server...")
+    logger.info("Shutting down FOURX server...")
 
 app = FastAPI(
-    title="Neon Four Chess API",
-    description="Backend API and WebSockets for 4-Player Neon Chess",
+    title="FOURX API",
+    description="Backend API and WebSockets for FOURX chess",
     version="1.0.0",
     lifespan=lifespan
 )
@@ -132,13 +133,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(classic_router)
+
 # ----------------- REST ENDPOINTS -----------------
 
 @app.get("/api/health")
 def health_check():
     return {
         "status": "online",
-        "service": "Neon Four Chess",
+        "service": "FOURX",
         "active_rooms": len(active_rooms)
     }
 
@@ -519,7 +522,7 @@ async def websocket_endpoint(
                         })
 
             elif msg_type == "CHAT":
-                # Neon chat message
+                # Room chat message
                 text = str(payload.get("text", "")).strip()[:100]
                 if text:
                     sender_name = room_data["players"].get(role, {}).get("name", "Spectator") if role else "Spectator"
@@ -599,4 +602,4 @@ if os.path.exists(FRONTEND_DIR):
         index_file = os.path.join(FRONTEND_DIR, "index.html")
         if os.path.exists(index_file):
             return FileResponse(index_file)
-        return {"message": "Neon Four Chess Backend API is Running"}
+        return {"message": "FOURX backend API is running"}
