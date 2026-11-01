@@ -290,9 +290,18 @@
                             <span class="classic-eyebrow">CLASSIC MATCH</span>
                             <h1>1v1 Chess</h1>
                         </div>
-                        <div id="classic-room-tag" class="classic-room-tag hidden">ROOM <strong id="classic-room-code"></strong></div>
+                        <div id="classic-room-tag" class="classic-room-tag hidden">
+                            ROOM <strong id="classic-room-code"></strong>
+                            <button id="classic-copy-code" class="mini-btn">Copy</button>
+                            <button id="classic-share-room" class="mini-btn">Share</button>
+                        </div>
                     </div>
                     <div id="classic-status" class="classic-status" aria-live="polite">Choose a mode to begin</div>
+                    <div class="classic-lobby-controls">
+                        <button id="classic-ready" class="neon-btn secondary-btn hidden">Ready</button>
+                        <button id="classic-start-match" class="neon-btn primary-btn hidden" disabled>Start Match</button>
+                        <button id="classic-leave-room" class="neon-btn secondary-btn hidden">Leave Room</button>
+                    </div>
                     <div class="classic-layout">
                         <div class="classic-board-column">
                             <div class="classic-player" id="classic-black-card">
@@ -550,7 +559,7 @@
                 <div class="dashboard-scrollable">
                     <div class="screen-hero">
                         <h2>Friends & Challenges</h2>
-                        <p>Invite companions to custom 4-player rooms or 2v2 alliances</p>
+                        <p>Invite friends to Classic 1v1 or Four-Player Chess rooms</p>
                     </div>
 
                     <div class="friends-action-bar">
@@ -875,18 +884,62 @@
         <div id="create-room-modal" class="game-modal hidden">
             <div class="modal-card">
                 <div class="modal-header">
-                    <h2>HOST TOURNAMENT ARENA</h2>
+                    <h2>CREATE A FRIEND ROOM</h2>
                     <button class="modal-close-btn">✕</button>
                 </div>
                 <form id="form-create-room" class="modal-body">
                     <div class="form-group">
+                        <label for="create-game-mode">Game mode:</label>
+                        <select id="create-game-mode">
+                            <option value="four_player">Four-Player Chess (4 seats)</option>
+                            <option value="classic">Classic Chess (1v1)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
                         <label for="create-player-name">Your Commander Name:</label>
                         <input type="text" id="create-player-name" value="Grandmaster" maxlength="25" required>
                     </div>
+                    <div class="form-group">
+                        <label for="create-time-control">Time control:</label>
+                        <select id="create-time-control">
+                            <option value="unlimited">Unlimited</option>
+                            <option value="5+0">5 + 0</option>
+                            <option value="10+0">10 + 0</option>
+                            <option value="15+10">15 + 10</option>
+                        </select>
+                    </div>
+                    <label class="room-privacy-option">
+                        <input type="checkbox" id="create-room-private" checked>
+                        Private room (invite by code)
+                    </label>
                     <button type="submit" class="neon-btn primary-btn submit-btn">Create & Enter Arena</button>
                 </form>
             </div>
         </div>
+
+        <section id="view-room-lobby" class="app-view">
+            <div class="dashboard-scrollable room-lobby">
+                <div class="screen-hero">
+                    <h2>FOURX Waiting Lobby</h2>
+                    <p id="lobby-status-text">Waiting for players to join…</p>
+                    <p id="lobby-network-status" aria-live="polite">Connecting…</p>
+                </div>
+                <div class="lobby-code-card">
+                    <span>ROOM CODE</span>
+                    <strong id="lobby-room-code">------</strong>
+                    <div class="lobby-actions">
+                        <button class="neon-btn secondary-btn lobby-touch-btn" id="btn-lobby-copy">Copy code</button>
+                        <button class="neon-btn secondary-btn lobby-touch-btn" id="btn-lobby-share">Share invite</button>
+                    </div>
+                </div>
+                <div class="lobby-player-grid" id="lobby-player-slots"></div>
+                <div class="lobby-actions lobby-main-actions">
+                    <button class="neon-btn primary-btn lobby-touch-btn" id="btn-lobby-ready">Ready</button>
+                    <button class="neon-btn primary-btn lobby-touch-btn hidden" id="btn-lobby-start">Start Game</button>
+                    <button class="neon-btn secondary-btn lobby-touch-btn" id="btn-lobby-leave">Leave Room</button>
+                </div>
+            </div>
+        </section>
 
         <!-- 3. Join Online Room Modal -->
         <div id="join-room-modal" class="game-modal hidden">
@@ -905,6 +958,8 @@
                         <input type="text" id="join-player-name" value="Guest" maxlength="25" required>
                     </div>
                     <button type="submit" class="neon-btn magenta-btn submit-btn">Join Match</button>
+                    <button type="button" class="neon-btn secondary-btn submit-btn" id="btn-browse-public-rooms">Find public rooms</button>
+                    <div class="public-room-list" id="public-room-list" aria-live="polite"></div>
                 </form>
             </div>
         </div>

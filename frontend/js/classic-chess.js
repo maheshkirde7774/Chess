@@ -20,10 +20,67 @@ class ClassicChessUI {
         this.restoreSession();
     }
 
+    async copyRoomCode() {
+        try {
+            await navigator.clipboard.writeText(this.roomCode);
+            this.app.showToast("Room code copied.");
+        } catch (error) {
+            this.app.showToast(`Share room code: ${this.roomCode}`);
+        }
+    }
+
+    async shareRoom() {
+        const invite = {
+            title: "FOURX Classic Chess invitation",
+            text: `Join my FOURX Classic Chess room. Room code: ${this.roomCode}`,
+            url: window.location.href,
+        };
+        try {
+            if (navigator.share) await navigator.share(invite);
+            else await this.copyRoomCode();
+        } catch (error) {
+            if (error.name !== "AbortError") this.app.showToast(`Share room code: ${this.roomCode}`);
+        }
+    }
+
+    async leaveRoom() {
+        try {
+            await this.request(
+                `/classic/rooms/${encodeURIComponent(this.roomCode)}/leave`,
+                {
+                    method: "POST",
+                    body: JSON.stringify({ player_id: this.playerId }),
+                }
+            );
+            this.socketEnabled = false;
+            clearInterval(this.pingInterval);
+            clearTimeout(this.reconnectTimeout);
+            this.socket?.close();
+            sessionStorage.removeItem("classicChessSession");
+            this.roomCode = null;
+            this.playerId = null;
+            this.state = null;
+            this.app.switchView("view-home");
+        } catch (error) {
+            this.app.showToast(error.message, true);
+        }
+    }
+
     bindEvents() {
         document.getElementById("classic-start-local")?.addEventListener("click", () => {
             this.startRoom("local");
         });
+        document.getElementById("classic-start-match")?.addEventListener("click", () => {
+            this.send({ type: "START_GAME" });
+        });
+        document.getElementById("classic-ready")?.addEventListener("click", (event) => {
+            const button = event.currentTarget;
+            button.dataset.ready = button.dataset.ready !== "true" ? "true" : "false";
+            this.send({ type: "READY", ready: button.dataset.ready === "true" });
+        });
+        document.getElementById("classic-leave-room")?.addEventListener("click", () => this.leaveRoom());
+        document.getElementById("classic-copy-code")?.addEventListener("click", () => this.copyRoomCode());
+        document.getElementById("classic-share-room")?.addEventListener("click", () => this.shareRoom());
         document.getElementById("classic-create-online")?.addEventListener("click", () => {
             this.startRoom("online");
         });
@@ -94,16 +151,37 @@ class ClassicChessUI {
         }
     }
 
+    async createOnlineRoom(playerName, timeControl, isPrivate = true) {
+        try {
+            const data = await this.request("/classic/rooms", {
+                method: "POST",
+                body: JSON.stringify({
+                    player_name: playerName,
+                    time_control: timeControl,
+                    mode: "online",
+                    is_private: isPrivate,
+                }),
+            });
+            this.enterRoom(data, "online");
+        } catch (error) {
+            this.app.showToast(error.message, true);
+        }
+    }
+
     async joinRoom() {
         const roomCode = document.getElementById("classic-join-code")?.value.trim().toUpperCase();
         if (!roomCode) {
             this.app.showToast("Enter a classic room code.", true);
             return;
         }
+        await this.joinRoomWithCode(roomCode, this.playerName);
+    }
+
+    async joinRoomWithCode(roomCode, playerName) {
         try {
             const data = await this.request("/classic/rooms/join", {
                 method: "POST",
-                body: JSON.stringify({ room_code: roomCode, player_name: this.playerName }),
+                body: JSON.stringify({ room_code: roomCode, player_name: playerName }),
             });
             this.enterRoom(data, "online");
         } catch (error) {
@@ -126,9 +204,10 @@ class ClassicChessUI {
             mode: this.mode,
             mySide: this.mySide,
         }));
-        document.getElementById("classic-menu-modal")?.classList.add("hidden");
+        this.app.hideAllModals();
         document.getElementById("classic-room-tag")?.classList.toggle("hidden", mode !== "online");
         document.getElementById("classic-room-code").textContent = this.roomCode;
+        document.getElementById("classic-leave-room")?.classList.toggle("hidden", mode !== "online");
         document.getElementById("classic-result")?.classList.add("hidden");
         this.app.switchView("view-classic");
         this.render(data);
@@ -146,7 +225,8 @@ class ClassicChessUI {
         if (!saved?.roomCode || !saved?.playerId) return;
         try {
             const data = await this.request(
-                `/classic/rooms/${encodeURIComponent(saved.roomCode)}?player_id=${encodeURIComponent(saved.playerId)}`
+                `/classic/rooms/${encodeURIComponent(saved.roomCode)}`,
+                { headers: { Authorization: `Bearer ${saved.playerId}` } }
             );
             this.enterRoom({ ...data, player_id: saved.playerId }, data.mode || saved.mode || "online");
         } catch (error) {
@@ -160,11 +240,12 @@ class ClassicChessUI {
         this.socketEnabled = true;
         const url = window.CONFIG.getWsUrl();
         const socket = new WebSocket(
-            `${url}/classic/${encodeURIComponent(this.roomCode)}?player_id=${encodeURIComponent(this.playerId)}`
+            `${url}/classic/${encodeURIComponent(this.roomCode)}`
         );
         this.socket = socket;
         socket.onopen = () => {
             if (this.socket !== socket) return;
+            this.send({ type: "AUTH", player_id: this.playerId });
             clearInterval(this.pingInterval);
             this.pingInterval = setInterval(() => this.send({ type: "PING" }), 10000);
         };
@@ -218,13 +299,30 @@ class ClassicChessUI {
         const status = data.status || this.state.status;
         const turnName = this.players[this.state.turn]?.name || this.state.turn;
         let label = status === "WAITING"
-            ? "Waiting for a second player to join…"
+            ? (Object.keys(this.players).length === 2
+                ? "Both players joined · waiting for the host to start…"
+                : "Waiting for a second player to join…")
             : `${this.state.turn === "white" ? "White" : "Black"} (${turnName}) to move${this.state.in_check ? " — Check!" : ""}`;
         if (this.state.draw_offer && this.state.draw_offer !== this.mySide && this.mode === "online") {
             label = `${this.players[this.state.draw_offer]?.name || "Your opponent"} offered a draw`;
         }
         if (status === "COMPLETED") label = this.resultText();
         document.getElementById("classic-status").textContent = label;
+        const isWaiting = status === "WAITING" && this.mode === "online";
+        const isHost = this.players[this.mySide]?.host === true;
+        const startButton = document.getElementById("classic-start-match");
+        startButton.classList.toggle("hidden", !isWaiting || !isHost);
+        startButton.disabled = Object.keys(this.players).length !== 2;
+        document.getElementById("classic-ready").classList.toggle(
+            "hidden", !isWaiting || isHost
+        );
+        document.getElementById("classic-leave-room").classList.toggle(
+            "hidden", this.mode !== "online" || !isWaiting
+        );
+        if (isWaiting && !isHost) {
+            const ready = this.players[this.mySide]?.ready === true;
+            document.getElementById("classic-ready").textContent = ready ? "Cancel Ready" : "Ready";
+        }
         document.getElementById("classic-white-name").textContent = this.players.white?.name || "White";
         document.getElementById("classic-black-name").textContent = this.players.black?.name || "Waiting for player";
         document.getElementById("classic-white-card").classList.toggle("active", status === "PLAYING" && this.state.turn === "white");

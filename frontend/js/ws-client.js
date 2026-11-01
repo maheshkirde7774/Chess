@@ -21,60 +21,60 @@ class WebSocketClient {
         this.playerId = playerId;
 
         const baseWs = window.CONFIG.getWsUrl();
-        const wsUrl = `${baseWs}/${this.roomCode}?player_id=${encodeURIComponent(this.playerId)}`;
+        const wsUrl = `${baseWs}/${this.roomCode}`;
 
         if (this.ws) {
             try { this.ws.close(); } catch(e) {}
         }
 
-        console.log(`Connecting to WebSocket: ${wsUrl}`);
+        console.log(`Connecting to room ${this.roomCode}`);
         if (this.onStatusCallback) this.onStatusCallback("CONNECTING");
 
         try {
-            this.ws = new WebSocket(wsUrl);
+            const socket = new WebSocket(wsUrl);
+            this.ws = socket;
+            socket.onopen = () => {
+                if (this.ws !== socket) return;
+                console.log("WebSocket connected successfully!");
+                if (this.onStatusCallback) this.onStatusCallback("CONNECTED");
+
+                this.send({ type: "AUTH", player_id: this.playerId });
+                if (this.pingInterval) clearInterval(this.pingInterval);
+                this.pingInterval = setInterval(() => {
+                    this.send({ type: "PING" });
+                }, 15000);
+            };
+
+            socket.onmessage = (event) => {
+                if (this.ws !== socket) return;
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data.type === "PONG") return;
+                    if (this.onMessageCallback) this.onMessageCallback(data);
+                } catch (err) {
+                    console.error("Error parsing WebSocket message:", err);
+                }
+            };
+
+            socket.onerror = (err) => {
+                if (this.ws !== socket) return;
+                console.warn("WebSocket error:", err);
+                if (this.onStatusCallback) this.onStatusCallback("ERROR");
+            };
+
+            socket.onclose = () => {
+                if (this.ws !== socket) return;
+                console.log("WebSocket closed");
+                if (this.pingInterval) clearInterval(this.pingInterval);
+                if (this.onStatusCallback) this.onStatusCallback("DISCONNECTED");
+
+                if (!this.isExplicitlyClosed) this._scheduleReconnect();
+            };
         } catch (e) {
             console.error("WebSocket initialization failed:", e);
             this._scheduleReconnect();
             return;
         }
-
-        this.ws.onopen = () => {
-            console.log("WebSocket connected successfully!");
-            if (this.onStatusCallback) this.onStatusCallback("CONNECTED");
-
-            // Start heartbeat ping
-            if (this.pingInterval) clearInterval(this.pingInterval);
-            this.pingInterval = setInterval(() => {
-                this.send({ type: "PING" });
-            }, 15000);
-        };
-
-        this.ws.onmessage = (event) => {
-            try {
-                const data = JSON.parse(event.data);
-                if (data.type === "PONG") return; // Heartbeat response
-                if (this.onMessageCallback) {
-                    this.onMessageCallback(data);
-                }
-            } catch (err) {
-                console.error("Error parsing WebSocket message:", err);
-            }
-        };
-
-        this.ws.onerror = (err) => {
-            console.warn("WebSocket error:", err);
-            if (this.onStatusCallback) this.onStatusCallback("ERROR");
-        };
-
-        this.ws.onclose = () => {
-            console.log("WebSocket closed");
-            if (this.pingInterval) clearInterval(this.pingInterval);
-            if (this.onStatusCallback) this.onStatusCallback("DISCONNECTED");
-
-            if (!this.isExplicitlyClosed) {
-                this._scheduleReconnect();
-            }
-        };
     }
 
     _scheduleReconnect() {

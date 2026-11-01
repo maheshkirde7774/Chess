@@ -10,12 +10,13 @@ import uuid
 from typing import Any, Dict, Optional
 
 import chess
-from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, WebSocket, WebSocketDisconnect, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.db import ClassicRoomModel, get_db
 from app.ws_manager import manager
+from app.room_limits import enforce_room_rate_limit
 
 logger = logging.getLogger("classic_chess")
 router = APIRouter()
@@ -37,11 +38,15 @@ class CreateClassicRoomRequest(BaseModel):
     player_name: str = Field(default="White", min_length=1, max_length=30)
     time_control: str = "10+0"
     mode: str = "online"
+    is_private: bool = True
 
 
 class JoinClassicRoomRequest(BaseModel):
     room_code: str = Field(..., min_length=4, max_length=10)
     player_name: str = Field(default="Black", min_length=1, max_length=30)
+
+class ClassicPlayerRequest(BaseModel):
+    player_id: str = Field(..., min_length=20, max_length=100)
 
 
 class ClassicGame:
@@ -201,7 +206,13 @@ class ClassicGame:
 
 def _sanitize_players(players: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
     return {
-        side: {"side": side, "name": player["name"], "connected": player.get("connected", False)}
+        side: {
+            "side": side,
+            "name": player["name"],
+            "connected": player.get("connected", False),
+            "ready": player.get("ready", False),
+            "host": player.get("host", False),
+        }
         for side, player in players.items()
     }
 
@@ -229,6 +240,7 @@ def _runtime(db: Session, code: str) -> Optional[Dict[str, Any]]:
         "status": record.status,
         "players": players,
         "game": game,
+        "is_private": record.is_private,
     }
     classic_rooms[code] = room
     return room
@@ -242,7 +254,7 @@ def _persist(db: Session, code: str, room: Dict[str, Any]) -> None:
     if snapshot["status"] == "COMPLETED":
         room["status"] = "COMPLETED"
     else:
-        room["status"] = "PLAYING" if room["mode"] == "local" or len(room["players"]) == 2 else "WAITING"
+        room["status"] = "PLAYING" if room["mode"] == "local" else room["status"]
     record.status = room["status"]
     record.players_json = json.dumps(room["players"])
     record.state_json = json.dumps(room["game"].serialize())
@@ -252,11 +264,23 @@ def _persist(db: Session, code: str, room: Dict[str, Any]) -> None:
 def _public_state(code: str, room: Dict[str, Any]) -> Dict[str, Any]:
     server_time = time.time()
     game_state = room["game"].snapshot(server_time)
+    if room["status"] == "WAITING":
+        game_state["status"] = "WAITING"
     return {
         "room_code": code,
         "server_time": server_time,
         "mode": room["mode"],
         "time_control": room["time_control"],
+        "settings": {
+            "game_mode": "classic",
+            "is_private": room.get("is_private", True),
+            "time_control": room["time_control"],
+            "max_players": 2,
+        },
+        "host_side": next(
+            (side for side, player in room["players"].items() if player.get("host")),
+            None,
+        ),
         "status": game_state["status"] if room["mode"] == "local" or len(room["players"]) == 2 else "WAITING",
         "players": _sanitize_players(room["players"]),
         "game_state": game_state,
@@ -279,7 +303,12 @@ def _generate_code(db: Session) -> str:
 
 
 @router.post("/classic/rooms")
-def create_classic_room(request: CreateClassicRoomRequest, db: Session = Depends(get_db)):
+def create_classic_room(
+    request: CreateClassicRoomRequest,
+    http_request: Request,
+    db: Session = Depends(get_db),
+):
+    enforce_room_rate_limit(http_request, "classic-create")
     mode = request.mode.strip().lower()
     if mode not in {"online", "local"}:
         raise HTTPException(status_code=422, detail="Mode must be local or online")
@@ -291,15 +320,24 @@ def create_classic_room(request: CreateClassicRoomRequest, db: Session = Depends
     white_id = str(uuid.uuid4())
     started = mode == "local"
     game = ClassicGame(control, started)
-    players = {"white": {"player_id": white_id, "name": request.player_name.strip() or "White", "connected": False}}
+    players = {
+        "white": {
+            "player_id": white_id,
+            "name": request.player_name.strip() or "White",
+            "connected": False,
+            "ready": True,
+            "host": True,
+        }
+    }
     if started:
-        players["black"] = {"player_id": white_id, "name": "Black", "connected": False}
+        players["black"] = {"player_id": white_id, "name": "Black", "connected": False, "ready": True}
     room = {"mode": mode, "time_control": control, "status": "PLAYING" if started else "WAITING",
-            "players": players, "game": game}
+            "players": players, "game": game, "is_private": request.is_private}
     classic_rooms[code] = room
     record = ClassicRoomModel(
         room_code=code, mode=mode, time_control=control, status=room["status"],
         players_json=json.dumps(players), state_json=json.dumps(game.serialize()),
+        is_private=request.is_private,
     )
     db.add(record)
     db.commit()
@@ -311,7 +349,12 @@ def create_classic_room(request: CreateClassicRoomRequest, db: Session = Depends
 
 
 @router.post("/classic/rooms/join")
-async def join_classic_room(request: JoinClassicRoomRequest, db: Session = Depends(get_db)):
+async def join_classic_room(
+    request: JoinClassicRoomRequest,
+    http_request: Request,
+    db: Session = Depends(get_db),
+):
+    enforce_room_rate_limit(http_request, "classic-join", limit=20)
     code = request.room_code.strip().upper()
     room = _runtime(db, code)
     if room is None:
@@ -323,11 +366,9 @@ async def join_classic_room(request: JoinClassicRoomRequest, db: Session = Depen
 
     black_id = str(uuid.uuid4())
     room["players"]["black"] = {
-        "player_id": black_id, "name": request.player_name.strip() or "Black", "connected": False,
+        "player_id": black_id, "name": request.player_name.strip() or "Black",
+        "connected": False, "ready": False, "host": False,
     }
-    room["status"] = "PLAYING"
-    if room["game"].clock_started_at is None and room["game"].clocks["white"] is not None:
-        room["game"].clock_started_at = time.time()
     _persist(db, code, room)
     await manager.broadcast_to_room(f"classic:{code}", {
         "type": "PLAYER_JOINED", "players": _sanitize_players(room["players"]),
@@ -336,12 +377,73 @@ async def join_classic_room(request: JoinClassicRoomRequest, db: Session = Depen
     return {**_public_state(code, room), "player_id": black_id, "your_side": "black"}
 
 
-@router.get("/classic/rooms/{room_code}")
-def get_classic_room(room_code: str, player_id: str = Query(...), db: Session = Depends(get_db)):
+@router.post("/classic/rooms/{room_code}/start")
+async def start_classic_room(room_code: str, request: ClassicPlayerRequest, db: Session = Depends(get_db)):
     code = room_code.strip().upper()
     room = _runtime(db, code)
     if room is None:
         raise HTTPException(status_code=404, detail="Classic room not found")
+    side = _player_side(room["players"], request.player_id)
+    if side is None:
+        raise HTTPException(status_code=403, detail="Unauthorized player")
+    if not room["players"][side].get("host"):
+        raise HTTPException(status_code=403, detail="Only the room host can start the game")
+    if room["status"] != "WAITING":
+        raise HTTPException(status_code=400, detail="The game has already started")
+    if room["mode"] != "online" or len(room["players"]) != 2:
+        raise HTTPException(status_code=400, detail="Both player seats must be filled before starting")
+    room["status"] = "PLAYING"
+    if room["game"].clock_started_at is None and room["game"].clocks["white"] is not None:
+        room["game"].clock_started_at = time.time()
+    _persist(db, code, room)
+    await manager.broadcast_to_room(f"classic:{code}", {
+        "type": "GAME_STATE", "event": "START_GAME", **_public_state(code, room),
+    })
+    return {"success": True, **_public_state(code, room)}
+
+
+@router.post("/classic/rooms/{room_code}/leave")
+async def leave_classic_room(room_code: str, request: ClassicPlayerRequest, db: Session = Depends(get_db)):
+    code = room_code.strip().upper()
+    room = _runtime(db, code)
+    if room is None:
+        raise HTTPException(status_code=404, detail="Classic room not found")
+    side = _player_side(room["players"], request.player_id)
+    if side is None:
+        raise HTTPException(status_code=403, detail="Unauthorized player")
+    if room["status"] != "WAITING":
+        raise HTTPException(status_code=400, detail="Started games must be resigned rather than left")
+    leaving_player_id = room["players"][side]["player_id"]
+    del room["players"][side]
+    record = db.query(ClassicRoomModel).filter(ClassicRoomModel.room_code == code).first()
+    if not room["players"]:
+        db.delete(record)
+        db.commit()
+        classic_rooms.pop(code, None)
+    else:
+        if side == "white" and "black" in room["players"]:
+            room["players"]["black"]["host"] = True
+        _persist(db, code, room)
+        await manager.broadcast_to_room(f"classic:{code}", {
+            "type": "PLAYER_LEFT", **_public_state(code, room),
+        })
+    await manager.close_player_connection(f"classic:{code}", leaving_player_id)
+    return {"success": True}
+
+
+@router.get("/classic/rooms/{room_code}")
+def get_classic_room(
+    room_code: str,
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+):
+    code = room_code.strip().upper()
+    room = _runtime(db, code)
+    if room is None:
+        raise HTTPException(status_code=404, detail="Classic room not found")
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Player authorization is required")
+    player_id = authorization[7:]
     side = _player_side(room["players"], player_id)
     if side is None:
         raise HTTPException(status_code=403, detail="Unauthorized player")
@@ -353,27 +455,45 @@ def get_classic_room(room_code: str, player_id: str = Query(...), db: Session = 
 async def classic_websocket(
     websocket: WebSocket,
     room_code: str,
-    player_id: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
     code = room_code.strip().upper()
     room = _runtime(db, code)
-    side = _player_side(room["players"], player_id or "") if room else None
-    if room is None or side is None:
+    if room is None:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+
+    await websocket.accept()
+    try:
+        auth_message = await asyncio.wait_for(websocket.receive_text(), timeout=5)
+        if len(auth_message) > 4096:
+            raise ValueError("Authentication message is too large")
+        auth_payload = json.loads(auth_message)
+    except (asyncio.TimeoutError, json.JSONDecodeError, ValueError, WebSocketDisconnect):
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+    player_id = (
+        auth_payload.get("player_id")
+        if isinstance(auth_payload, dict) and auth_payload.get("type") == "AUTH"
+        else None
+    )
+    side = _player_side(room["players"], player_id or "")
+    if side is None or not isinstance(player_id, str):
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
 
     manager_room = f"classic:{code}"
-    await manager.connect(manager_room, player_id, websocket)
+    await manager.connect(manager_room, player_id, websocket, accepted=True)
     room["players"][side]["connected"] = True
     _persist(db, code, room)
     await manager.send_personal_message(manager_room, player_id, {
         "type": "SYNC_STATE", "your_side": side, **_public_state(code, room),
     })
     await manager.broadcast_to_room(manager_room, {
-        "type": "PRESENCE_UPDATE", "players": _sanitize_players(room["players"]),
+        "type": "PRESENCE_UPDATE", **_public_state(code, room),
     })
     try:
+        message_times: list[float] = []
         while True:
             try:
                 raw_message = await asyncio.wait_for(websocket.receive_text(), timeout=1.0)
@@ -386,6 +506,19 @@ async def classic_websocket(
                         "type": "GAME_STATE", "event": "TIMEOUT", **_public_state(code, room),
                     })
                 continue
+            if len(raw_message) > 4096:
+                    await manager.send_personal_message(manager_room, player_id, {
+                        "type": "ERROR", "message": "Message is too large",
+                    })
+                    continue
+            now = time.monotonic()
+            message_times = [timestamp for timestamp in message_times if now - timestamp <= 10]
+            if len(message_times) >= 60:
+                    await manager.send_personal_message(manager_room, player_id, {
+                        "type": "ERROR", "message": "Message rate limit exceeded",
+                    })
+                    continue
+            message_times.append(now)
             try:
                 payload = json.loads(raw_message)
             except json.JSONDecodeError:
@@ -421,7 +554,21 @@ async def classic_websocket(
                         "type": "PONG", "server_time": time.time(),
                     })
                     continue
-                if message_type == "MOVE":
+                if message_type == "START_GAME":
+                    if not room["players"][side].get("host"):
+                        raise PermissionError("Only the room host can start the game")
+                    if room["status"] != "WAITING":
+                        raise ValueError("The game has already started")
+                    if room["mode"] != "online" or len(room["players"]) != 2:
+                        raise ValueError("Both player seats must be filled before starting")
+                    room["status"] = "PLAYING"
+                    if room["game"].clock_started_at is None and room["game"].clocks["white"] is not None:
+                        room["game"].clock_started_at = time.time()
+                elif message_type == "READY":
+                    if room["status"] != "WAITING":
+                        raise ValueError("The room is no longer waiting")
+                    room["players"][side]["ready"] = payload.get("ready") is True
+                elif message_type == "MOVE":
                     current_side = "white" if room["game"].board.turn else "black"
                     if room["mode"] != "local" and side != current_side:
                         raise PermissionError("Not your turn")
@@ -476,9 +623,12 @@ async def classic_websocket(
                     "type": "ERROR", "message": str(error),
                 })
     except WebSocketDisconnect:
-        manager.disconnect(manager_room, player_id)
-        room["players"][side]["connected"] = False
-        _persist(db, code, room)
-        await manager.broadcast_to_room(manager_room, {
-            "type": "PRESENCE_UPDATE", "players": _sanitize_players(room["players"]),
-        })
+        manager.disconnect(manager_room, player_id, websocket)
+        if manager.is_player_connected(manager_room, player_id):
+            return
+        if side in room["players"]:
+            room["players"][side]["connected"] = False
+            _persist(db, code, room)
+            await manager.broadcast_to_room(manager_room, {
+                "type": "PRESENCE_UPDATE", **_public_state(code, room),
+            })

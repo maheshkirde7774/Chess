@@ -148,21 +148,25 @@ def test_room_join_authorization_and_sqlite_persistence(client):
     assert joined.status_code == 200
     black = joined.json()
     assert black["your_side"] == "black"
+    assert black["status"] == "WAITING"
     assert "player_id" not in joined.json()["players"]["white"]
     assert client.post("/classic/rooms/join", json={"room_code": code}).status_code == 400
-    assert client.get(f"/classic/rooms/{code}?player_id=not-a-token").status_code == 403
+    assert client.post(f"/classic/rooms/{code}/start", json={"player_id": black["player_id"]}).status_code == 403
+    assert client.post(f"/classic/rooms/{code}/start", json={"player_id": white["player_id"]}).status_code == 200
+    assert client.get(
+        f"/classic/rooms/{code}", headers={"Authorization": "Bearer not-a-token"},
+    ).status_code == 403
     with pytest.raises(WebSocketDisconnect):
-        with client.websocket_connect(f"/ws/classic/{code}?player_id=not-a-token"):
-            pass
+        with client.websocket_connect(f"/ws/classic/{code}") as socket:
+            socket.send_json({"type": "AUTH", "player_id": "not-a-token"})
+            socket.receive_json()
 
-    with client.websocket_connect(
-        f"/ws/classic/{code}?player_id={white['player_id']}"
-    ) as white_ws:
+    with client.websocket_connect(f"/ws/classic/{code}") as white_ws:
+        white_ws.send_json({"type": "AUTH", "player_id": white["player_id"]})
         assert white_ws.receive_json()["type"] == "SYNC_STATE"
         white_ws.receive_json()  # Presence broadcast
-        with client.websocket_connect(
-            f"/ws/classic/{code}?player_id={black['player_id']}"
-        ) as black_ws:
+        with client.websocket_connect(f"/ws/classic/{code}") as black_ws:
+            black_ws.send_json({"type": "AUTH", "player_id": black["player_id"]})
             assert black_ws.receive_json()["type"] == "SYNC_STATE"
             black_ws.receive_json()  # Presence broadcast
             white_ws.receive_json()  # Black connected
@@ -177,12 +181,14 @@ def test_room_join_authorization_and_sqlite_persistence(client):
             assert white_state["game_state"]["moves"][0]["san"] == "e4"
 
     classic_rooms.pop(code)
-    restored = client.get(f"/classic/rooms/{code}?player_id={white['player_id']}")
+    restored = client.get(
+        f"/classic/rooms/{code}",
+        headers={"Authorization": f"Bearer {white['player_id']}"},
+    )
     assert restored.status_code == 200
     assert restored.json()["game_state"]["moves"][0]["uci"] == "e2e4"
-    with client.websocket_connect(
-        f"/ws/classic/{code}?player_id={white['player_id']}"
-    ) as reconnected_ws:
+    with client.websocket_connect(f"/ws/classic/{code}") as reconnected_ws:
+        reconnected_ws.send_json({"type": "AUTH", "player_id": white["player_id"]})
         assert reconnected_ws.receive_json()["game_state"]["moves"][0]["uci"] == "e2e4"
 
 
@@ -194,12 +200,31 @@ def test_local_room_starts_immediately_and_rejects_join(client):
     assert client.post("/classic/rooms/join", json={"room_code": data["room_code"]}).status_code == 400
 
 
+def test_public_classic_room_discovery_and_host_start(client):
+    created = client.post("/classic/rooms", json={
+        "player_name": "Host", "is_private": False, "time_control": "5+0",
+    })
+    host = created.json()
+    public = client.get("/rooms").json()
+    listed = next(room for room in public if room["room_code"] == host["room_code"])
+    assert listed["settings"]["game_mode"] == "classic"
+    assert listed["settings"]["max_players"] == 2
+    assert "player_id" not in str(listed["players"])
+    joined = client.post("/classic/rooms/join", json={
+        "room_code": host["room_code"], "player_name": "Guest",
+    }).json()
+    assert joined["status"] == "WAITING"
+    assert client.post(
+        f"/classic/rooms/{host['room_code']}/start",
+        json={"player_id": host["player_id"]},
+    ).status_code == 200
+
+
 def test_host_websocket_presence_does_not_start_waiting_room(client):
     created = client.post("/classic/rooms", json={"mode": "online"}).json()
     code = created["room_code"]
-    with client.websocket_connect(
-        f"/ws/classic/{code}?player_id={created['player_id']}"
-    ) as host_ws:
+    with client.websocket_connect(f"/ws/classic/{code}") as host_ws:
+        host_ws.send_json({"type": "AUTH", "player_id": created["player_id"]})
         assert host_ws.receive_json()["status"] == "WAITING"
         host_ws.receive_json()
         joined = client.post("/classic/rooms/join", json={"room_code": code})

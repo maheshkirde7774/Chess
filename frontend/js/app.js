@@ -17,6 +17,8 @@ class QuadChessApp {
         this.playerId = null;
         this.myRole = null; // 1: Cyan, 2: Magenta, 3: Lime, 4: Gold
         this.onlinePlayers = {};
+        this.roomSettings = {};
+        this.lobbyReady = false;
 
         this.wsClient = new window.WebSocketClient(
             (msg) => this.handleServerMessage(msg),
@@ -32,6 +34,7 @@ class QuadChessApp {
         this.initDashboardData();
         this.initPuzzlesList();
         this.initLeaderboardData();
+        this.restoreFourPlayerSession();
     }
 
     /* ==================== VIEW NAVIGATION ==================== */
@@ -248,7 +251,20 @@ class QuadChessApp {
             e.preventDefault();
             const nameInput = document.getElementById("create-player-name");
             const name = nameInput ? nameInput.value.trim() : "Grandmaster";
-            this.createOnlineRoom(name);
+            const mode = document.getElementById("create-game-mode")?.value || "four_player";
+            const timeControl = document.getElementById("create-time-control")?.value || "unlimited";
+            if (mode === "classic") {
+                this.classicChess.createOnlineRoom(
+                    name,
+                    timeControl,
+                    document.getElementById("create-room-private")?.checked !== false
+                );
+            } else {
+                this.createOnlineRoom(name, {
+                    is_private: document.getElementById("create-room-private")?.checked !== false,
+                    time_control: timeControl,
+                });
+            }
         });
 
         document.getElementById("form-join-room")?.addEventListener("submit", (e) => {
@@ -258,6 +274,9 @@ class QuadChessApp {
             const code = codeInput ? codeInput.value.trim().toUpperCase() : "";
             const name = nameInput ? nameInput.value.trim() : "Guest";
             if (code) this.joinOnlineRoom(code, name);
+        });
+        document.getElementById("btn-browse-public-rooms")?.addEventListener("click", () => {
+            this.loadPublicRooms();
         });
 
         // Copy Room Code
@@ -270,6 +289,16 @@ class QuadChessApp {
                 });
             }
         });
+        document.getElementById("btn-lobby-copy")?.addEventListener("click", () => this.copyRoomCode());
+        document.getElementById("btn-lobby-share")?.addEventListener("click", () => this.shareRoomInvite());
+        document.getElementById("btn-lobby-ready")?.addEventListener("click", () => {
+            this.lobbyReady = !this.lobbyReady;
+            this.wsClient.send({ type: "READY", ready: this.lobbyReady });
+        });
+        document.getElementById("btn-lobby-start")?.addEventListener("click", () => {
+            this.wsClient.send({ type: "START_GAME" });
+        });
+        document.getElementById("btn-lobby-leave")?.addEventListener("click", () => this.leaveRoom());
 
         // Pass Device Privacy Screen
         document.getElementById("btn-pass-unlock")?.addEventListener("click", () => {
@@ -477,14 +506,14 @@ class QuadChessApp {
 
     /* ==================== ONLINE MULTIPLAYER ==================== */
 
-    async createOnlineRoom(playerName) {
+    async createOnlineRoom(playerName, settings = {}) {
         try {
             this.showToast("Creating Tournament Arena...");
             const serverUrl = window.CONFIG.getServerUrl();
             const res = await fetch(`${serverUrl}/rooms`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ player_name: playerName })
+                body: JSON.stringify({ player_name: playerName, ...settings })
             });
 
             if (!res.ok) {
@@ -500,14 +529,56 @@ class QuadChessApp {
             this.gameMode = "online";
 
             this.hideAllModals();
+            this.roomSettings = settings;
+            this.lobbyReady = true;
+            this.saveFourPlayerSession();
             this.setupOnlineUI();
             this.wsClient.connect(this.roomCode, this.playerId);
 
-            this.switchView("view-game");
+            this.switchView("view-room-lobby");
+            this.renderRoomLobby();
             this.showToast(`Room ${this.roomCode} created! Share code with friends.`);
         } catch (e) {
             console.error("Room creation error:", e);
             this.showToast(`Error: ${e.message}`, true);
+        }
+    }
+
+    async loadPublicRooms() {
+        const container = document.getElementById("public-room-list");
+        if (!container) return;
+        container.textContent = "Loading public rooms…";
+        try {
+            const response = await fetch(`${window.CONFIG.getServerUrl()}/rooms`);
+            const rooms = await response.json();
+            if (!response.ok) throw new Error(rooms.detail || "Could not load public rooms.");
+            container.replaceChildren();
+            if (rooms.length === 0) {
+                container.textContent = "No public rooms are waiting right now.";
+                return;
+            }
+            rooms.forEach((room) => {
+                const row = document.createElement("div");
+                row.className = "public-room-entry";
+                const description = document.createElement("span");
+                const capacity = room.settings.max_players;
+                description.textContent = `${room.room_code} · ${Object.keys(room.players).length}/${capacity} players · ${room.settings.game_mode === "classic" ? "Classic" : "Four-Player"}`;
+                const join = document.createElement("button");
+                join.className = "neon-btn secondary-btn";
+                join.textContent = "Join";
+                join.addEventListener("click", () => {
+                    const name = document.getElementById("join-player-name")?.value.trim() || "Guest";
+                    if (room.settings.game_mode === "classic") {
+                        this.classicChess.joinRoomWithCode(room.room_code, name);
+                    } else {
+                        this.joinOnlineRoom(room.room_code, name);
+                    }
+                });
+                row.append(description, join);
+                container.append(row);
+            });
+        } catch (error) {
+            container.textContent = error.message;
         }
     }
 
@@ -534,10 +605,13 @@ class QuadChessApp {
             this.gameMode = "online";
 
             this.hideAllModals();
+            this.lobbyReady = false;
+            this.saveFourPlayerSession();
             this.setupOnlineUI();
             this.wsClient.connect(this.roomCode, this.playerId);
 
-            this.switchView("view-game");
+            this.switchView("view-room-lobby");
+            this.renderRoomLobby();
             this.showToast(`Joined as ${window.PLAYER_INFO[this.myRole]?.name || 'Player'}!`);
         } catch (e) {
             console.error("Room join error:", e);
@@ -556,6 +630,142 @@ class QuadChessApp {
         document.getElementById("network-indicator")?.classList.remove("hidden");
         document.getElementById("btn-undo")?.classList.add("hidden");
         document.getElementById("arena-mode-label").textContent = `Online Arena: #${this.roomCode}`;
+    }
+
+    saveFourPlayerSession() {
+        sessionStorage.setItem("fourPlayerChessSession", JSON.stringify({
+            roomCode: this.roomCode,
+            playerId: this.playerId,
+            playerRole: this.myRole,
+        }));
+    }
+
+    async restoreFourPlayerSession() {
+        let saved;
+        try {
+            saved = JSON.parse(sessionStorage.getItem("fourPlayerChessSession") || "null");
+        } catch (error) {
+            sessionStorage.removeItem("fourPlayerChessSession");
+            return;
+        }
+        if (!saved?.roomCode || !saved?.playerId) return;
+        try {
+            const response = await fetch(
+                `${window.CONFIG.getServerUrl()}/rooms/${encodeURIComponent(saved.roomCode)}`
+            );
+            if (!response.ok) throw new Error("Saved room is no longer available.");
+            const room = await response.json();
+            this.roomCode = room.room_code;
+            this.playerId = saved.playerId;
+            this.myRole = saved.playerRole || this.myRole;
+            this.roomSettings = room.settings || {};
+            this.isOnlineMode = true;
+            this.gameMode = "online";
+            this.onlinePlayers = room.players || {};
+            this.setupOnlineUI();
+            this.wsClient.connect(this.roomCode, this.playerId);
+            this.switchView(room.status === "PLAYING" || room.status === "COMPLETED" ? "view-game" : "view-room-lobby");
+            this.renderRoomLobby(room);
+        } catch (error) {
+            sessionStorage.removeItem("fourPlayerChessSession");
+            this.showToast(error.message, true);
+        }
+    }
+
+    renderRoomLobby(state = null) {
+        const code = document.getElementById("lobby-room-code");
+        const slots = document.getElementById("lobby-player-slots");
+        if (!code || !slots || !this.roomCode) return;
+        code.textContent = this.roomCode;
+        const players = state?.players || this.onlinePlayers || {};
+        const hostRole = state?.host_role || Object.keys(players).find(
+            (role) => players[role]?.host
+        );
+        const status = state?.status || "WAITING";
+        const statusText = document.getElementById("lobby-status-text");
+        const playerCount = Object.keys(players).length;
+        if (statusText) {
+            statusText.textContent = status === "PLAYING"
+                ? "The host has started the match."
+                : `${playerCount} of 4 seats filled · ${this.roomSettings.is_private === false ? "Public room" : "Private room"}`;
+        }
+        slots.replaceChildren();
+        for (let role = 1; role <= 4; role += 1) {
+            const player = players[String(role)] || players[role];
+            const slot = document.createElement("div");
+            slot.className = `lobby-player-slot${player ? " occupied" : ""}`;
+            const seat = document.createElement("strong");
+            seat.textContent = window.PLAYER_INFO[role]?.name || `Seat ${role}`;
+            const name = document.createElement("span");
+            name.textContent = player?.name || "Open seat";
+            const details = document.createElement("small");
+            details.textContent = player
+                ? `${player.host ? "Host · " : ""}${player.connected ? "Online" : "Reconnecting"} · ${player.ready ? "Ready" : "Not ready"}`
+                : "Waiting for a player";
+            slot.append(seat, name, details);
+            slots.append(slot);
+        }
+        const readyButton = document.getElementById("btn-lobby-ready");
+        const startButton = document.getElementById("btn-lobby-start");
+        if (readyButton) {
+            readyButton.classList.toggle("hidden", Number(this.myRole) === Number(hostRole) || status !== "WAITING");
+            readyButton.textContent = this.lobbyReady ? "Cancel Ready" : "Ready";
+        }
+        if (startButton) {
+            startButton.classList.toggle("hidden", Number(this.myRole) !== Number(hostRole) || status !== "WAITING");
+            startButton.disabled = playerCount !== 4;
+            startButton.title = playerCount === 4 ? "" : "All four seats must be filled";
+        }
+    }
+
+    async copyRoomCode() {
+        if (!this.roomCode) return;
+        try {
+            await navigator.clipboard.writeText(this.roomCode);
+            this.showToast("Room code copied.");
+        } catch (error) {
+            this.showToast(`Share room code: ${this.roomCode}`);
+        }
+    }
+
+    async shareRoomInvite() {
+        if (!this.roomCode) return;
+        const invitation = {
+            title: "FOURX room invitation",
+            text: `Join my FOURX chess room. Room code: ${this.roomCode}`,
+            url: window.location.href,
+        };
+        try {
+            if (navigator.share) await navigator.share(invitation);
+            else await this.copyRoomCode();
+        } catch (error) {
+            if (error.name !== "AbortError") this.showToast(`Share room code: ${this.roomCode}`);
+        }
+    }
+
+    async leaveRoom() {
+        if (!this.roomCode || !this.playerId) return;
+        try {
+            const response = await fetch(
+                `${window.CONFIG.getServerUrl()}/rooms/${encodeURIComponent(this.roomCode)}/leave`,
+                {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ player_id: this.playerId }),
+                }
+            );
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.detail || "Could not leave room.");
+            this.wsClient.disconnect();
+            sessionStorage.removeItem("fourPlayerChessSession");
+            this.roomCode = null;
+            this.playerId = null;
+            this.myRole = null;
+            this.isOnlineMode = false;
+            this.switchView("view-home");
+        } catch (error) {
+            this.showToast(error.message, true);
+        }
     }
 
     /* ==================== MOVE HANDLING & AI BOTS ==================== */
@@ -642,8 +852,15 @@ class QuadChessApp {
     handleServerMessage(data) {
         if (data.type === "SYNC_STATE") {
             if (data.your_role) this.myRole = data.your_role;
-            if (data.players) this.updatePlayersHUD(data.players);
+            if (data.settings) this.roomSettings = data.settings;
+            if (data.players) {
+                this.onlinePlayers = data.players;
+                this.lobbyReady = data.players[String(this.myRole)]?.ready === true;
+                this.updatePlayersHUD(data.players);
+            }
+            this.renderRoomLobby(data);
             if (data.game_state) this.ui.render(data.game_state);
+            if (data.status === "PLAYING") this.switchView("view-game");
         } else if (data.type === "MOVE_MADE") {
             const isCapture = data.game_state.captured_pieces[data.player]?.length > 
                               this.engine.capturedPieces[data.player]?.length;
@@ -657,14 +874,31 @@ class QuadChessApp {
                 window.soundSystem.playCheck();
             }
         } else if (data.type === "PLAYER_JOINED" || data.type === "PRESENCE_UPDATE") {
-            if (data.players) this.updatePlayersHUD(data.players);
+            if (data.players) {
+                this.onlinePlayers = data.players;
+                this.lobbyReady = data.players[String(this.myRole)]?.ready === true;
+                this.updatePlayersHUD(data.players);
+                this.renderRoomLobby({ players: data.players, status: "WAITING" });
+            }
             if (data.name) this.showToast(`${data.name} entered the arena`);
+        } else if (data.type === "GAME_STARTED") {
+            this.onlinePlayers = data.players || this.onlinePlayers;
+            if (data.game_state) this.ui.render(data.game_state);
+            this.renderRoomLobby({ players: this.onlinePlayers, status: "PLAYING" });
+            this.switchView("view-game");
+            this.showToast("The match has started.");
+        } else if (data.type === "PLAYER_LEFT") {
+            this.onlinePlayers = data.players || {};
+            this.renderRoomLobby({ players: this.onlinePlayers, status: "WAITING" });
         } else if (data.type === "PLAYER_RESIGNED") {
             this.showToast(`Player ${data.player} resigned.`);
             if (data.game_state) this.ui.render(data.game_state);
         } else if (data.type === "GAME_RESET") {
-            this.showToast("Arena reset for new match!");
+            this.showToast("Room reset. Waiting for the host to start.");
             if (data.game_state) this.ui.render(data.game_state);
+            this.switchView("view-room-lobby");
+            this.onlinePlayers = data.players || this.onlinePlayers;
+            this.renderRoomLobby({ players: this.onlinePlayers, status: data.status || "WAITING" });
         } else if (data.type === "CHAT") {
             this.displayChatMessage(data.sender, data.role, data.text);
         } else if (data.type === "ERROR") {
@@ -673,6 +907,14 @@ class QuadChessApp {
     }
 
     handleConnectionStatus(status) {
+        const lobbyNetwork = document.getElementById("lobby-network-status");
+        if (lobbyNetwork) {
+            lobbyNetwork.textContent = status === "CONNECTED"
+                ? "Connected · room updates are live"
+                : status === "CONNECTING"
+                    ? "Reconnecting to room…"
+                    : "Connection interrupted · retrying automatically";
+        }
         const dot = document.getElementById("net-status-dot");
         const label = document.getElementById("net-status-label");
         if (!dot || !label) return;
@@ -724,9 +966,14 @@ class QuadChessApp {
 
     handleRestart() {
         if (this.isOnlineMode) {
-            const serverUrl = window.CONFIG.getServerUrl();
-            fetch(`${serverUrl}/rooms/${this.roomCode}/reset`, { method: "POST" })
-                .catch(err => console.error(err));
+            fetch(`${window.CONFIG.getServerUrl()}/rooms/${encodeURIComponent(this.roomCode)}/reset`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ player_id: this.playerId }),
+            }).then(async (response) => {
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.detail || "Could not reset the room.");
+            }).catch(error => this.showToast(error.message, true));
         } else {
             if (this.gameMode === "ai") this.startAIGame(this.aiDifficulty);
             else if (this.gameMode === "team") this.startTeamGame();

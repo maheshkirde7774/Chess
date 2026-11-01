@@ -7,7 +7,7 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115%2B-ec4899?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![WebSockets](https://img.shields.io/badge/WebSockets-Real--Time-10b981?style=for-the-badge&logo=websocket&logoColor=black)](https://websockets.readthedocs.io/)
 [![Capacitor](https://img.shields.io/badge/Capacitor-Android%20Ready-f59e0b?style=for-the-badge&logo=capacitor&logoColor=black)](https://capacitorjs.com/)
-[![Tests](https://img.shields.io/badge/Tests-24%20Passed-0ea5e9?style=for-the-badge&logo=pytest&logoColor=black)](backend/tests/)
+[![Tests](https://img.shields.io/badge/Tests-28%20Passed-0ea5e9?style=for-the-badge&logo=pytest&logoColor=black)](backend/tests/)
 [![License](https://img.shields.io/badge/License-MIT-ffffff?style=for-the-badge)](LICENSE)
 
 <br/>
@@ -29,7 +29,7 @@
 | **🎨 Charcoal & Graphite Theme** | Minimalist dark aesthetic with subtle Cyan, Purple, Magenta, and Gold accents, realistic Staunton piece vectors, and dark slate squares. |
 | **🤖 Tactical AI Bots** | Full single-player vs AI mode with 3 intelligent bots and selectable tactical tiers: Novice (800), Club (1400), and Master (2000). |
 | **🤝 2v2 Team Alliance** | Team combat format: South (Cyan) & North (Lime) alliance battle West (Magenta) & East (Gold) with joint checkmate objectives. |
-| **🌐 Online Multiplayer** | Instant room creation with six-character room codes, authoritative server validation, and real-time WebSocket synchronization. |
+| **🌐 Online Multiplayer** | Private or public Classic 1v1 and four-player rooms, secure six-character invitation codes, ready/presence lobbies, host-controlled start, server-validated actions, and WebSocket reconnection. |
 | **📱 Local Pass & Play** | Couch multiplayer on a single device with turn-privacy screens, auto-board rotation, and move undo. |
 | **🧩 Tactical Daily Puzzles** | Multi-army chess puzzles with rating tracking, fork attacks, queen diversion sacrifices, and solution verifier. |
 | **🏆 Global Leaderboards** | Competitive Elo rankings, win-rate metrics, leagues (Diamond & Master), and player profile statistics. |
@@ -200,9 +200,11 @@ python backend/run.py
 
 ## Classic 1v1 Chess
 
-Choose **Classic Chess (1v1)** on the home screen to select local pass-and-play or online play. Online games use a private six-character room code; White hosts and Black joins. The available clocks are 1+0, 3+0, 5+0, 10+0, 15+10, and unlimited. The server validates moves and keeps each match, its move history, and remaining clock time in the separate `classic_rooms` SQLite table. Threefold repetition and the fifty-move rule are claimable draws; automatic terminal draws are handled by the chess rules engine. Play vs AI is explicitly marked Coming Soon.
+Choose **Classic Chess (1v1)** on the home screen to select local pass-and-play or online play. Online games use a six-character room code; the host starts once both seats are occupied. Public rooms appear in the room browser, while private rooms are invitation-only. The available clocks are 1+0, 3+0, 5+0, 10+0, 15+10, and unlimited. The server validates moves and keeps each match, its move history, and remaining clock time in the separate `classic_rooms` SQLite table. Threefold repetition and the fifty-move rule are claimable draws; automatic terminal draws are handled by the chess rules engine. Play vs AI is explicitly marked Coming Soon.
 
-The classic mode uses separate `/classic/rooms` REST endpoints and `/ws/classic/{room_code}` WebSockets. The standard four-player `/rooms` APIs and engine are unchanged.
+Classic mode uses separate `/classic/rooms` REST endpoints and `/ws/classic/{room_code}` WebSockets. Four-player rooms use `/rooms` and `/ws/{room_code}` and keep the original four-player engine. Four-player time-control selections are saved as room settings; authoritative four-player clocks are not yet implemented.
+
+Both online modes provide a waiting lobby with room code copy/share, occupied and empty seats, presence/readiness, host start, and waiting-room leave. Share uses the native Web Share API when available and falls back to copying the room code. Player credentials are bearer secrets returned only to the matching player; they are excluded from room snapshots and broadcasts.
 
 ---
 
@@ -252,14 +254,19 @@ cd android
 | `GET` | `/api/health` | Health check & active room count |
 | `POST` | `/rooms` | Create a room (assigns Player 1: Cyan) |
 | `POST` | `/rooms/join` | Join room by code (assigns next open seat 2..4) |
+| `GET` | `/rooms` | List public waiting rooms |
 | `GET` | `/rooms/{code}` | Retrieve full serialized board state & active players |
+| `POST` | `/rooms/{code}/start` | Start a full room as its host |
+| `POST` | `/rooms/{code}/leave` | Leave a waiting room |
 | `POST` | `/rooms/{code}/move` | Authoritative move submission |
 | `POST` | `/rooms/{code}/resign` | Resign current player |
 | `POST` | `/rooms/{code}/reset` | Rematch & reset board |
 | `GET` | `/api/history` | Match log of completed games |
 | `POST` | `/classic/rooms` | Create a local or online classic 1v1 match |
 | `POST` | `/classic/rooms/join` | Join an available classic match as Black |
-| `GET` | `/classic/rooms/{code}?player_id=...` | Retrieve an authorized classic game state |
+| `POST` | `/classic/rooms/{code}/start` | Start a full Classic room as its host |
+| `POST` | `/classic/rooms/{code}/leave` | Leave a waiting Classic room |
+| `GET` | `/classic/rooms/{code}` | Retrieve authorized classic state with `Authorization: Bearer <player_id>` |
 
 ### WebSocket Frame Specification (`/ws/{room_code}`)
 
@@ -290,7 +297,7 @@ cd android
 }
 ```
 
-Classic matches use `/ws/classic/{room_code}?player_id=...`. `MOVE` frames use algebraic squares (`e2` to `e4`) and optional promotion (`q`, `r`, `b`, or `n`); `RESIGN`, `OFFER_DRAW`, `ACCEPT_DRAW`, and `DECLINE_DRAW` are also supported. Both players receive a sanitized full-state update after accepted actions; player IDs are returned only to the matching player.
+Both WebSocket endpoints authenticate with an initial `{"type":"AUTH","player_id":"…"}` frame; credentials are not placed in WebSocket URLs. Classic `MOVE` frames use algebraic squares (`e2` to `e4`) and optional promotion (`q`, `r`, `b`, or `n`); `RESIGN`, `OFFER_DRAW`, `ACCEPT_DRAW`, and `DECLINE_DRAW` are also supported. Both players receive sanitized state updates after accepted actions; player IDs are returned only to the matching player.
 
 ---
 
@@ -302,7 +309,7 @@ All current backend tests, including the original four-player tests and the clas
 pytest backend/tests/ -v
 ```
 
-The current suite contains 24 tests and is run with `pytest backend/tests/ -v`.
+The current suite contains 28 tests and is run with `pytest backend/tests/ -v`.
 
 ---
 

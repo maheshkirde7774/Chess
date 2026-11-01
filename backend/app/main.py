@@ -4,21 +4,24 @@ Provides REST endpoints, SQLite persistence, and WebSockets for multiplayer ches
 """
 
 import os
+import asyncio
 import json
-import uuid
-import random
+import secrets
 import string
 import logging
+import re
+import time
+from collections import deque
 from typing import Dict, Any, Optional
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Depends, Query, status
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Depends, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
-from app.db import init_db, get_db, RoomModel, GameHistoryModel
+from app.db import init_db, get_db, RoomModel, GameHistoryModel, ClassicRoomModel
 from app.engine import (
     FourPlayerChessEngine, Move,
     PLAYER_CYAN, PLAYER_MAGENTA, PLAYER_LIME, PLAYER_GOLD,
@@ -31,6 +34,7 @@ from app.models import (
 )
 from app.ws_manager import manager
 from app.classic import router as classic_router
+from app.room_limits import enforce_room_rate_limit as _rate_limit
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
@@ -49,13 +53,23 @@ logger = logging.getLogger("neon_four_chess")
 #    "status": str ("WAITING", "PLAYING", "COMPLETED")
 # }
 active_rooms: Dict[str, Dict[str, Any]] = {}
+ROOM_CODE_CHARS = string.ascii_uppercase.replace("O", "").replace("I", "") + "23456789"
+SUPPORTED_TIME_CONTROLS = {"unlimited", "5+0", "10+0", "15+10"}
 
 def generate_room_code(length: int = 6) -> str:
     """Generates a random uppercase room code (e.g. NEON42)."""
-    chars = string.ascii_uppercase + string.digits
-    # Avoid easily confused letters
-    chars = chars.replace('O', '').replace('0', '').replace('I', '').replace('1', '')
-    return "".join(random.choices(chars, k=length))
+    return "".join(secrets.choice(ROOM_CODE_CHARS) for _ in range(length))
+
+def _new_player_id() -> str:
+    return secrets.token_urlsafe(32)
+
+def _settings(room_data: Dict[str, Any]) -> Dict[str, Any]:
+    return room_data.get("settings", {
+        "game_mode": "four_player",
+        "is_private": True,
+        "time_control": "unlimited",
+        "max_players": 4,
+    })
 
 def get_or_create_room_runtime(db: Session, room_code: str) -> Optional[Dict[str, Any]]:
     """Loads room from memory or SQLite database."""
@@ -83,11 +97,22 @@ def get_or_create_room_runtime(db: Session, room_code: str) -> Optional[Dict[str
             players_data = {int(k): v for k, v in raw_players.items()}
         except Exception:
             players_data = {}
+    try:
+        settings = json.loads(room_record.settings_json or "{}")
+    except (TypeError, json.JSONDecodeError):
+        settings = {}
 
     room_runtime = {
         "engine": engine,
         "players": players_data,
-        "status": room_record.status or "WAITING"
+        "status": room_record.status or "WAITING",
+        "settings": {
+            "game_mode": "four_player",
+            "is_private": True,
+            "time_control": "unlimited",
+            "max_players": 4,
+            **settings,
+        },
     }
     active_rooms[room_code] = room_runtime
     return room_runtime
@@ -106,6 +131,7 @@ def persist_room_state(db: Session, room_code: str):
     room_record.status = room_data["status"]
     room_record.players_json = json.dumps(room_data["players"])
     room_record.state_json = json.dumps(room_data["engine"].get_state())
+    room_record.settings_json = json.dumps(_settings(room_data))
     room_record.winner = room_data["engine"].winner
     db.commit()
 
@@ -146,13 +172,19 @@ def health_check():
     }
 
 @app.post("/rooms", response_model=CreateRoomResponse)
-def create_room(req: CreateRoomRequest, db: Session = Depends(get_db)):
+def create_room(req: CreateRoomRequest, request: Request, db: Session = Depends(get_db)):
     """Creates a new game room and assigns Player 1 (Cyan) to the creator."""
+    _rate_limit(request, "create")
+    if req.time_control not in SUPPORTED_TIME_CONTROLS:
+        raise HTTPException(status_code=422, detail="Unsupported time control")
     room_code = generate_room_code()
-    while db.query(RoomModel).filter(RoomModel.room_code == room_code).first():
+    while (
+        db.query(RoomModel).filter(RoomModel.room_code == room_code).first()
+        or db.query(ClassicRoomModel).filter(ClassicRoomModel.room_code == room_code).first()
+    ):
         room_code = generate_room_code()
 
-    player_id = str(uuid.uuid4())
+    player_id = _new_player_id()
     player_role = PLAYER_CYAN
     player_name = req.player_name.strip() or "Player 1"
 
@@ -161,14 +193,22 @@ def create_room(req: CreateRoomRequest, db: Session = Depends(get_db)):
         player_role: {
             "player_id": player_id,
             "name": player_name,
-            "connected": False
+            "connected": False,
+            "ready": True,
+            "host": True,
         }
     }
 
     active_rooms[room_code] = {
         "engine": engine,
         "players": players,
-        "status": "WAITING"
+        "status": "WAITING",
+        "settings": {
+            "game_mode": "four_player",
+            "is_private": req.is_private,
+            "time_control": req.time_control,
+            "max_players": 4,
+        },
     }
 
     # Save to SQLite
@@ -176,7 +216,8 @@ def create_room(req: CreateRoomRequest, db: Session = Depends(get_db)):
         room_code=room_code,
         status="WAITING",
         players_json=json.dumps(players),
-        state_json=json.dumps(engine.get_state())
+        state_json=json.dumps(engine.get_state()),
+        settings_json=json.dumps(active_rooms[room_code]["settings"]),
     )
     db.add(room_record)
     db.commit()
@@ -191,13 +232,18 @@ def create_room(req: CreateRoomRequest, db: Session = Depends(get_db)):
     )
 
 @app.post("/rooms/join", response_model=JoinRoomResponse)
-async def join_room(req: JoinRoomRequest, db: Session = Depends(get_db)):
+async def join_room(req: JoinRoomRequest, request: Request, db: Session = Depends(get_db)):
     """Joins an existing room and assigns the next open player role (1..4)."""
+    _rate_limit(request, "join", limit=20)
     room_code = req.room_code.strip().upper()
+    if not re.fullmatch(r"[A-HJ-NP-Z2-9]{6}", room_code):
+        raise HTTPException(status_code=422, detail="Invalid room code format")
     room_data = get_or_create_room_runtime(db, room_code)
 
     if not room_data:
         raise HTTPException(status_code=404, detail="Room not found")
+    if room_data["status"] != "WAITING":
+        raise HTTPException(status_code=400, detail="Room is not accepting players")
 
     players = room_data["players"]
 
@@ -211,18 +257,16 @@ async def join_room(req: JoinRoomRequest, db: Session = Depends(get_db)):
     if assigned_role is None:
         raise HTTPException(status_code=400, detail="Room is full (all 4 seats are occupied)")
 
-    player_id = str(uuid.uuid4())
+    player_id = _new_player_id()
     player_name = req.player_name.strip() or f"Player {assigned_role}"
 
     players[assigned_role] = {
         "player_id": player_id,
         "name": player_name,
-        "connected": False
+        "connected": False,
+        "ready": False,
+        "host": False,
     }
-
-    # If 4 players have joined, update status to PLAYING
-    if len(players) == 4 and room_data["status"] == "WAITING":
-        room_data["status"] = "PLAYING"
 
     persist_room_state(db, room_code)
 
@@ -264,8 +308,114 @@ def get_room_state(room_code: str, db: Session = Depends(get_db)):
         active_players=engine.active_players,
         players=_sanitize_players(room_data["players"]),
         game_state=state,
-        winner=engine.winner
+        winner=engine.winner,
+        settings=_settings(room_data),
+        host_role=next((role for role, player in room_data["players"].items() if player.get("host")), None),
     )
+
+@app.get("/rooms")
+def list_public_rooms(db: Session = Depends(get_db)):
+    """Lists discoverable waiting rooms without exposing player credentials."""
+    records = db.query(RoomModel).filter(RoomModel.status == "WAITING").all()
+    rooms = []
+    for record in records:
+        room_data = get_or_create_room_runtime(db, record.room_code)
+        if room_data and not _settings(room_data)["is_private"]:
+            rooms.append({
+                "room_code": record.room_code,
+                "status": room_data["status"],
+                "players": _sanitize_players(room_data["players"]),
+                "settings": _settings(room_data),
+                "host_role": next(
+                    (role for role, player in room_data["players"].items() if player.get("host")),
+                    None,
+                ),
+            })
+    classic_records = db.query(ClassicRoomModel).filter(
+        ClassicRoomModel.status == "WAITING",
+        ClassicRoomModel.is_private.is_(False),
+    ).all()
+    for record in classic_records:
+        try:
+            raw_players = json.loads(record.players_json or "{}")
+        except json.JSONDecodeError:
+            logger.exception("Could not decode players for classic room %s", record.room_code)
+            continue
+        rooms.append({
+            "room_code": record.room_code,
+            "status": record.status,
+            "players": {
+                side: {
+                    "side": side,
+                    "name": player.get("name", side.title()),
+                    "connected": player.get("connected", False),
+                    "ready": player.get("ready", False),
+                    "host": player.get("host", False),
+                }
+                for side, player in raw_players.items()
+            },
+            "settings": {
+                "game_mode": "classic",
+                "is_private": False,
+                "time_control": record.time_control,
+                "max_players": 2,
+            },
+            "host_role": "white",
+        })
+    return rooms
+
+@app.post("/rooms/{room_code}/start")
+async def start_room(room_code: str, req: ResignRequest, db: Session = Depends(get_db)):
+    """Starts a full four-player room when requested by its host."""
+    code = room_code.strip().upper()
+    room_data = get_or_create_room_runtime(db, code)
+    if not room_data:
+        raise HTTPException(status_code=404, detail="Room not found")
+    role = _get_role_by_player_id(room_data["players"], req.player_id)
+    if role is None or not room_data["players"][role].get("host"):
+        raise HTTPException(status_code=403, detail="Only the room host can start the game")
+    if room_data["status"] != "WAITING":
+        raise HTTPException(status_code=400, detail="The game has already started")
+    if len(room_data["players"]) != room_data["settings"]["max_players"]:
+        raise HTTPException(status_code=400, detail="All player seats must be filled before starting")
+    room_data["status"] = "PLAYING"
+    persist_room_state(db, code)
+    await manager.broadcast_to_room(code, {
+        "type": "GAME_STARTED", "room_code": code,
+        "players": _sanitize_players(room_data["players"]),
+        "game_state": room_data["engine"].get_state(),
+    })
+    return {"success": True, "status": "PLAYING"}
+
+@app.post("/rooms/{room_code}/leave")
+async def leave_room(room_code: str, req: ResignRequest, db: Session = Depends(get_db)):
+    """Leaves a waiting room and transfers host to the next occupied seat."""
+    code = room_code.strip().upper()
+    room_data = get_or_create_room_runtime(db, code)
+    if not room_data:
+        raise HTTPException(status_code=404, detail="Room not found")
+    role = _get_role_by_player_id(room_data["players"], req.player_id)
+    if role is None:
+        raise HTTPException(status_code=403, detail="Unauthorized: invalid player ID")
+    if room_data["status"] != "WAITING":
+        raise HTTPException(status_code=400, detail="Started games must be resigned rather than left")
+    del room_data["players"][role]
+    record = db.query(RoomModel).filter(RoomModel.room_code == code).first()
+    if not room_data["players"]:
+        db.delete(record)
+        db.commit()
+        active_rooms.pop(code, None)
+    else:
+        if not any(player.get("host") for player in room_data["players"].values()):
+            new_host = min(room_data["players"])
+            room_data["players"][new_host]["host"] = True
+        persist_room_state(db, code)
+        await manager.broadcast_to_room(code, {
+            "type": "PLAYER_LEFT", "role": role,
+            "players": _sanitize_players(room_data["players"]),
+        })
+    await manager.close_player_connection(code, req.player_id)
+    return {"success": True}
 
 @app.post("/rooms/{room_code}/move")
 async def execute_move(room_code: str, req: MoveRequest, db: Session = Depends(get_db)):
@@ -276,6 +426,8 @@ async def execute_move(room_code: str, req: MoveRequest, db: Session = Depends(g
         raise HTTPException(status_code=404, detail="Room not found")
 
     engine: FourPlayerChessEngine = room_data["engine"]
+    if room_data["status"] != "PLAYING":
+        raise HTTPException(status_code=400, detail="The host has not started this game")
 
     # Verify authorization
     player_role = _get_role_by_player_id(room_data["players"], req.player_id)
@@ -325,6 +477,8 @@ async def resign_game(room_code: str, req: ResignRequest, db: Session = Depends(
         raise HTTPException(status_code=404, detail="Room not found")
 
     engine: FourPlayerChessEngine = room_data["engine"]
+    if room_data["status"] != "PLAYING":
+        raise HTTPException(status_code=400, detail="The host has not started this game")
     player_role = _get_role_by_player_id(room_data["players"], req.player_id)
     if player_role is None:
         raise HTTPException(status_code=403, detail="Unauthorized: invalid player ID")
@@ -351,20 +505,25 @@ async def resign_game(room_code: str, req: ResignRequest, db: Session = Depends(
     return {"success": True, "message": msg}
 
 @app.post("/rooms/{room_code}/reset")
-async def reset_room(room_code: str, db: Session = Depends(get_db)):
+async def reset_room(room_code: str, req: ResignRequest, db: Session = Depends(get_db)):
     """Resets the board for a new match in the same room."""
     room_code = room_code.strip().upper()
     room_data = get_or_create_room_runtime(db, room_code)
     if not room_data:
         raise HTTPException(status_code=404, detail="Room not found")
+    role = _get_role_by_player_id(room_data["players"], req.player_id)
+    if role is None or not room_data["players"][role].get("host"):
+        raise HTTPException(status_code=403, detail="Only the room host can reset the game")
 
     room_data["engine"] = FourPlayerChessEngine()
-    room_data["status"] = "PLAYING" if len(room_data["players"]) == 4 else "WAITING"
+    room_data["status"] = "WAITING"
     persist_room_state(db, room_code)
 
     await manager.broadcast_to_room(room_code, {
         "type": "GAME_RESET",
         "room_code": room_code,
+        "status": room_data["status"],
+        "players": _sanitize_players(room_data["players"]),
         "game_state": room_data["engine"].get_state()
     })
 
@@ -392,7 +551,6 @@ def get_game_history(db: Session = Depends(get_db)):
 async def websocket_endpoint(
     websocket: WebSocket,
     room_code: str,
-    player_id: Optional[str] = Query(None),
     db: Session = Depends(get_db)
 ):
     room_code = room_code.strip().upper()
@@ -402,13 +560,24 @@ async def websocket_endpoint(
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
 
-    # If player_id not provided in query, client must send auth frame first
-    current_player_id = player_id
-    role = _get_role_by_player_id(room_data["players"], current_player_id) if current_player_id else None
+    await websocket.accept()
+    try:
+        auth_message = await asyncio.wait_for(websocket.receive_text(), timeout=5)
+        if len(auth_message) > 4096:
+            raise ValueError("Authentication message is too large")
+        auth_payload = json.loads(auth_message)
+    except (asyncio.TimeoutError, json.JSONDecodeError, ValueError, WebSocketDisconnect):
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+    player_id = auth_payload.get("player_id") if isinstance(auth_payload, dict) and auth_payload.get("type") == "AUTH" else None
+    role = _get_role_by_player_id(room_data["players"], player_id)
+    if role is None or not isinstance(player_id, str):
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
 
     # Connect to room manager
-    client_key = current_player_id or str(uuid.uuid4())
-    await manager.connect(room_code, client_key, websocket)
+    client_key = player_id
+    await manager.connect(room_code, client_key, websocket, accepted=True)
 
     # Send initial state snapshot to client
     await manager.send_personal_message(room_code, client_key, {
@@ -417,48 +586,46 @@ async def websocket_endpoint(
         "your_role": role,
         "status": room_data["status"],
         "players": _sanitize_players(room_data["players"]),
-        "game_state": room_data["engine"].get_state()
+        "game_state": room_data["engine"].get_state(),
+        "settings": _settings(room_data),
+        "host_role": next((seat for seat, player in room_data["players"].items() if player.get("host")), None),
     })
 
-    if role is not None:
-        room_data["players"][role]["connected"] = True
-        persist_room_state(db, room_code)
-        await manager.broadcast_to_room(room_code, {
-            "type": "PRESENCE_UPDATE",
-            "role": role,
-            "connected": True,
-            "players": _sanitize_players(room_data["players"])
-        })
+    room_data["players"][role]["connected"] = True
+    persist_room_state(db, room_code)
+    await manager.broadcast_to_room(room_code, {
+        "type": "PRESENCE_UPDATE",
+        "role": role,
+        "connected": True,
+        "players": _sanitize_players(room_data["players"])
+    })
 
     try:
+        message_times: deque[float] = deque()
         while True:
             data = await websocket.receive_text()
+            if len(data) > 4096:
+                await manager.send_personal_message(room_code, client_key, {"type": "ERROR", "message": "Message is too large"})
+                continue
             try:
                 payload = json.loads(data)
             except json.JSONDecodeError:
+                await manager.send_personal_message(room_code, client_key, {"type": "ERROR", "message": "Invalid message format"})
                 continue
-
+            if not isinstance(payload, dict) or not isinstance(payload.get("type"), str):
+                await manager.send_personal_message(room_code, client_key, {"type": "ERROR", "message": "Message must be a JSON object with a type"})
+                continue
+            now = time.monotonic()
+            while message_times and now - message_times[0] > 10:
+                message_times.popleft()
+            if len(message_times) >= 60:
+                await manager.send_personal_message(room_code, client_key, {"type": "ERROR", "message": "Message rate limit exceeded"})
+                continue
+            message_times.append(now)
             msg_type = payload.get("type")
 
             if msg_type == "PING":
                 await manager.send_personal_message(room_code, client_key, {"type": "PONG"})
-
-            elif msg_type == "AUTH":
-                # Late authentication
-                auth_id = payload.get("player_id")
-                if auth_id:
-                    matched_role = _get_role_by_player_id(room_data["players"], auth_id)
-                    if matched_role:
-                        current_player_id = auth_id
-                        role = matched_role
-                        room_data["players"][role]["connected"] = True
-                        persist_room_state(db, room_code)
-                        await manager.broadcast_to_room(room_code, {
-                            "type": "PRESENCE_UPDATE",
-                            "role": role,
-                            "connected": True,
-                            "players": _sanitize_players(room_data["players"])
-                        })
 
             elif msg_type == "MOVE":
                 engine: FourPlayerChessEngine = room_data["engine"]
@@ -470,11 +637,17 @@ async def websocket_endpoint(
                     })
                     continue
 
+                if room_data["status"] != "PLAYING":
+                    await manager.send_personal_message(room_code, client_key, {"type": "ERROR", "message": "The host has not started this game"})
+                    continue
                 from_sq = payload.get("from")
                 to_sq = payload.get("to")
                 promotion = payload.get("promotion")
 
-                if not from_sq or not to_sq:
+                if not _valid_square(from_sq) or not _valid_square(to_sq) or (
+                    promotion is not None and (not isinstance(promotion, str) or promotion.lower() not in {"q", "r", "b", "n"})
+                ):
+                    await manager.send_personal_message(room_code, client_key, {"type": "ERROR", "message": "Invalid move format"})
                     continue
 
                 move = Move(tuple(from_sq), tuple(to_sq), promotion)
@@ -504,7 +677,7 @@ async def websocket_endpoint(
 
             elif msg_type == "RESIGN":
                 engine: FourPlayerChessEngine = room_data["engine"]
-                if role is not None and role in engine.active_players:
+                if room_data["status"] == "PLAYING" and role in engine.active_players:
                     success, msg = engine.resign_player(role)
                     if success:
                         if engine.is_game_over:
@@ -520,6 +693,30 @@ async def websocket_endpoint(
                             "is_game_over": engine.is_game_over,
                             "winner": engine.winner
                         })
+            elif msg_type == "READY":
+                room_data["players"][role]["ready"] = payload.get("ready") is True
+                persist_room_state(db, room_code)
+                await manager.broadcast_to_room(room_code, {
+                    "type": "PRESENCE_UPDATE",
+                    "players": _sanitize_players(room_data["players"]),
+                })
+            elif msg_type == "START_GAME":
+                if not room_data["players"][role].get("host"):
+                    await manager.send_personal_message(room_code, client_key, {"type": "ERROR", "message": "Only the room host can start the game"})
+                    continue
+                if room_data["status"] != "WAITING":
+                    await manager.send_personal_message(room_code, client_key, {"type": "ERROR", "message": "The game has already started"})
+                    continue
+                if len(room_data["players"]) != room_data["settings"]["max_players"]:
+                    await manager.send_personal_message(room_code, client_key, {"type": "ERROR", "message": "All player seats must be filled before starting"})
+                    continue
+                room_data["status"] = "PLAYING"
+                persist_room_state(db, room_code)
+                await manager.broadcast_to_room(room_code, {
+                    "type": "GAME_STARTED", "room_code": room_code,
+                    "players": _sanitize_players(room_data["players"]),
+                    "game_state": room_data["engine"].get_state(),
+                })
 
             elif msg_type == "CHAT":
                 # Room chat message
@@ -532,10 +729,16 @@ async def websocket_endpoint(
                         "role": role,
                         "text": text
                     })
+            else:
+                await manager.send_personal_message(room_code, client_key, {
+                    "type": "ERROR", "message": "Unsupported action",
+                })
 
     except WebSocketDisconnect:
-        manager.disconnect(room_code, client_key)
-        if role is not None and role in room_data["players"]:
+        manager.disconnect(room_code, client_key, websocket)
+        if manager.is_player_connected(room_code, client_key):
+            return
+        if role in room_data["players"]:
             room_data["players"][role]["connected"] = False
             persist_room_state(db, room_code)
             await manager.broadcast_to_room(room_code, {
@@ -555,7 +758,9 @@ def _sanitize_players(players: Dict[int, Dict[str, Any]]) -> Dict[str, Any]:
             "role": role,
             "name": info.get("name", f"Player {role}"),
             "color": PLAYER_COLORS.get(role, "#ffffff"),
-            "connected": info.get("connected", False)
+            "connected": info.get("connected", False),
+            "ready": info.get("ready", False),
+            "host": info.get("host", False),
         }
     return sanitized
 
@@ -566,6 +771,13 @@ def _get_role_by_player_id(players: Dict[int, Dict[str, Any]], player_id: Option
         if info.get("player_id") == player_id:
             return role
     return None
+
+def _valid_square(square: Any) -> bool:
+    return (
+        isinstance(square, list)
+        and len(square) == 2
+        and all(isinstance(value, int) and not isinstance(value, bool) and 0 <= value < 14 for value in square)
+    )
 
 def _record_completed_game(db: Session, room_code: str, engine: FourPlayerChessEngine):
     """Saves a completed game to GameHistoryModel."""
