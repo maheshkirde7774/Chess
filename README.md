@@ -7,7 +7,7 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115%2B-ec4899?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![WebSockets](https://img.shields.io/badge/WebSockets-Real--Time-10b981?style=for-the-badge&logo=websocket&logoColor=black)](https://websockets.readthedocs.io/)
 [![Capacitor](https://img.shields.io/badge/Capacitor-Android%20Ready-f59e0b?style=for-the-badge&logo=capacitor&logoColor=black)](https://capacitorjs.com/)
-[![Tests](https://img.shields.io/badge/Tests-50%20Passed-0ea5e9?style=for-the-badge&logo=pytest&logoColor=black)](backend/tests/)
+[![Tests](https://img.shields.io/badge/Tests-59%20passed%20%7C%204%20external-0ea5e9?style=for-the-badge&logo=pytest&logoColor=black)](backend/tests/)
 [![License](https://img.shields.io/badge/License-MIT-ffffff?style=for-the-badge)](LICENSE)
 
 <br/>
@@ -30,6 +30,7 @@
 | **🤖 Tactical AI Bots** | Full single-player vs AI mode with 3 intelligent bots and selectable tactical tiers: Novice (800), Club (1400), and Master (2000). |
 | **🤝 2v2 Team Alliance** | Team combat format: South (Cyan) & North (Lime) alliance battle West (Magenta) & East (Gold) with joint checkmate objectives. |
 | **🌐 Online Multiplayer** | Private or public Classic 1v1 and four-player rooms, secure six-character invitation codes, ready/presence lobbies, host-controlled start, server-validated actions, and WebSocket reconnection. |
+| **🤝 FOURX Social** | Search and connect with players, manage friend requests and blocks, see server-derived presence, exchange private messages, and accept Classic or Four-Player match invitations. |
 | **📱 Local Pass & Play** | Couch multiplayer on a single device with turn-privacy screens, auto-board rotation, and move undo. |
 | **🧩 Daily Classic Puzzles** | A real Lichess daily puzzle, server-validated legal solution, progressive hints, difficulty-based XP, timezone-aware streaks, and an archive. Four-Player puzzles are marked as future work until they can be authoritatively validated. |
 | **🏆 Global Leaderboards** | Competitive Elo rankings, win-rate metrics, leagues (Diamond & Master), and player profile statistics. |
@@ -128,13 +129,15 @@ Chess/
 │   │   ├── main.py              # FastAPI application, REST endpoints, WebSockets, static serving
 │   │   ├── engine.py            # 14x14 cross board engine (rules, moves, checks, elimination)
 │   │   ├── models.py            # Pydantic request/response schemas
-│   │   ├── db.py                # SQLite database models (rooms, game history)
+│   │   ├── db.py                # SQLite database models and backward-compatible schema initialization
+│   │   ├── social.py            # Friend, presence, private messaging, invitation, and notification APIs
 │   │   └── ws_manager.py        # WebSocket ConnectionManager with broadcast & reconnect
 │   ├── tests/
 │   │   ├── __init__.py
 │   │   ├── test_engine.py       # Engine tests (geometry, pieces, pawns, promotion, check, elimination)
 │   │   ├── test_api.py          # REST API tests (create room, join, move authorization, resign)
-│   │   └── test_websockets.py   # WebSocket tests (sync, ping/pong, move broadcasts)
+│   │   ├── test_websockets.py  # WebSocket tests (sync, ping/pong, move broadcasts)
+│   │   └── test_social.py      # Social lifecycle, messaging, privacy, presence, and invitations
 │   ├── requirements.txt         # Python dependencies
 │   └── run.py                   # Server startup runner script
 ├── frontend/
@@ -293,6 +296,24 @@ cd android
 | `POST` | `/api/puzzles/archive/{puzzle_id}/move` | Verify archive practice moves; practice has no rewards |
 | `GET` | `/api/leaderboard?game_mode=four_player&category=rating&period=all_time` | Public paginated leaderboard; supports `game_mode` (`classic`, `four_player`, `all`), `category` (`rating`, `wins`, `streak`, `xp`, `weekly`, `monthly`), `period`, `search`, `offset`, and `limit`; optional profile bearer auth adds the current player's rank and nearby players |
 | `GET` | `/api/players/{username}` | Public profile fields and recent verified matches; excludes suspended/deleted profiles |
+| `GET` | `/api/social/dashboard` | Authenticated friends, requests, chats, invitations, blocked players, and notifications |
+| `GET` | `/api/social/players?q={username}` | Search active public usernames; blocked players are excluded |
+| `POST` | `/api/social/requests` | Send a friend request using `player_id` |
+| `POST` | `/api/social/requests/{id}/accept` | Accept an incoming friend request |
+| `POST` | `/api/social/requests/{id}/reject` | Reject an incoming friend request |
+| `DELETE` | `/api/social/requests/{id}` | Cancel an outgoing friend request |
+| `DELETE` | `/api/social/friends/{player_id}` | Remove a friend |
+| `POST` / `DELETE` | `/api/social/blocks/{player_id}` | Block or unblock a player |
+| `POST` | `/api/social/reports` | Submit a rate-limited player report |
+| `POST` | `/api/social/conversations/{player_id}` | Open a conversation with a friend |
+| `GET` | `/api/social/conversations/{id}/messages` | Read authorized private chat history |
+| `POST` | `/api/social/conversations/{id}/messages` | Send a validated, rate-limited message |
+| `POST` | `/api/social/conversations/{id}/read` | Mark messages in a conversation as read |
+| `POST` | `/api/social/invitations` | Invite a friend to `classic` or `four_player` |
+| `POST` | `/api/social/invitations/{id}/accept` | Accept and create/join the correct private game room |
+| `POST` | `/api/social/invitations/{id}/reject` | Reject a game invitation |
+| `DELETE` | `/api/social/invitations/{id}` | Cancel an outgoing game invitation |
+| `POST` | `/api/social/notifications/read` | Mark the authenticated player's notifications as read |
 | `POST` | `/classic/rooms` | Create a local or online classic 1v1 match |
 | `POST` | `/classic/rooms/join` | Join an available classic match as Black |
 | `POST` | `/classic/rooms/{code}/start` | Start a full Classic room as its host |
@@ -334,17 +355,21 @@ Leaderboard ratings use the existing server-updated Classic Elo and separate Fou
 
 Both WebSocket endpoints authenticate with an initial `{"type":"AUTH","player_id":"…"}` frame; credentials are not placed in WebSocket URLs. Classic `MOVE` frames use algebraic squares (`e2` to `e4`) and optional promotion (`q`, `r`, `b`, or `n`); `RESIGN`, `OFFER_DRAW`, `ACCEPT_DRAW`, and `DECLINE_DRAW` are also supported. Both players receive sanitized state updates after accepted actions; player IDs are returned only to the matching player.
 
+The social presence and notification socket is `/ws/social`; authenticate its first frame with `{"type":"AUTH","token":"<profile bearer token>"}`. Send `PING` about every 20 seconds to keep the server-observed session alive; send `ACTIVITY` after user interaction to distinguish `online` from `away`. The server reports `playing` only while an authenticated game-room connection is active and expires stale presence after 45 seconds. Presence and notifications are delivered only to the player's friends or authenticated recipient. As with all profile credentials, use HTTPS/WSS in deployed environments.
+
+Social API routes require the existing profile bearer credential in the `Authorization` header. The database initializer adds the social tables and indexes without dropping or rewriting existing player, room, or match records. Private conversations are limited to current friends; either-direction blocks disable messaging and invitations. Messages are limited to 2,000 characters, and friend requests, messages, invitations, and reports are rate-limited. Invitations expire after five minutes. Accepting a Classic invitation launches a two-seat online waiting room; the host starts the clock once both players have joined. Accepting a Four-Player invitation joins a private lobby with two seats occupied and room for up to four players.
+
 ---
 
 ## 🔬 Testing & Quality Assurance
 
-All current backend tests, including the original four-player tests and the classic chess suite, pass:
+Run the backend suite, including the original four-player and Classic 1v1 tests, with:
 
 ```powershell
 pytest backend/tests/ -v
 ```
 
-The backend suite includes Classic AI legality, difficulty-budget, side selection, timed moves, cancellation, and terminal-position tests. Run all tests, including the original four-player and multiplayer coverage, with `pytest backend/tests/ -v`.
+The latest run completed with 59 passing tests. Four daily-puzzle integration tests could not obtain the upstream Lichess puzzle and failed with HTTP 503; they are unrelated to the social milestone.
 
 ---
 

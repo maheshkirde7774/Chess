@@ -193,6 +193,133 @@ class ProfileAchievementModel(Base):
     unlocked_at = Column(DateTime, default=get_utc_now, nullable=False)
 
 
+class FriendRequestModel(Base):
+    __tablename__ = "friend_requests"
+    __table_args__ = (
+        UniqueConstraint("pair_key", name="uq_friend_request_pair"),
+        Index("ix_friend_request_recipient_status", "addressee_id", "status"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    requester_id = Column(String(36), nullable=False, index=True)
+    addressee_id = Column(String(36), nullable=False, index=True)
+    pair_key = Column(String(73), nullable=False)
+    status = Column(String(16), nullable=False, default="pending")
+    created_at = Column(DateTime, default=get_utc_now, nullable=False)
+    updated_at = Column(DateTime, default=get_utc_now, nullable=False)
+
+
+class FriendshipModel(Base):
+    __tablename__ = "friendships"
+    __table_args__ = (
+        UniqueConstraint("pair_key", name="uq_friendship_pair"),
+        Index("ix_friendship_low_player", "player_low_id"),
+        Index("ix_friendship_high_player", "player_high_id"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    player_low_id = Column(String(36), nullable=False)
+    player_high_id = Column(String(36), nullable=False)
+    pair_key = Column(String(73), nullable=False)
+    created_at = Column(DateTime, default=get_utc_now, nullable=False)
+
+
+class BlockedPlayerModel(Base):
+    __tablename__ = "blocked_players"
+    __table_args__ = (
+        UniqueConstraint("blocker_id", "blocked_id", name="uq_blocked_player_pair"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    blocker_id = Column(String(36), nullable=False, index=True)
+    blocked_id = Column(String(36), nullable=False, index=True)
+    created_at = Column(DateTime, default=get_utc_now, nullable=False)
+
+
+class ConversationModel(Base):
+    __tablename__ = "conversations"
+    __table_args__ = (
+        UniqueConstraint("pair_key", name="uq_conversation_pair"),
+        Index("ix_conversation_participant_a", "participant_a_id"),
+        Index("ix_conversation_participant_b", "participant_b_id"),
+    )
+
+    id = Column(String(36), primary_key=True)
+    participant_a_id = Column(String(36), nullable=False)
+    participant_b_id = Column(String(36), nullable=False)
+    pair_key = Column(String(73), nullable=False)
+    created_at = Column(DateTime, default=get_utc_now, nullable=False)
+
+
+class PrivateMessageModel(Base):
+    __tablename__ = "private_messages"
+    __table_args__ = (
+        Index("ix_private_message_conversation_created", "conversation_id", "created_at"),
+        Index("ix_private_message_recipient_read", "recipient_id", "read_at"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    conversation_id = Column(String(36), nullable=False)
+    sender_id = Column(String(36), nullable=False, index=True)
+    recipient_id = Column(String(36), nullable=False, index=True)
+    content = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=get_utc_now, nullable=False)
+    delivered_at = Column(DateTime, nullable=True)
+    read_at = Column(DateTime, nullable=True)
+
+
+class SocialNotificationModel(Base):
+    __tablename__ = "social_notifications"
+    __table_args__ = (
+        UniqueConstraint("dedupe_key", name="uq_social_notification_dedupe"),
+        Index("ix_social_notification_recipient_created", "recipient_id", "created_at"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    recipient_id = Column(String(36), nullable=False, index=True)
+    actor_id = Column(String(36), nullable=True)
+    notification_type = Column(String(32), nullable=False)
+    dedupe_key = Column(String(180), nullable=False)
+    payload_json = Column(Text, nullable=False, default="{}")
+    created_at = Column(DateTime, default=get_utc_now, nullable=False)
+    read_at = Column(DateTime, nullable=True)
+
+
+class GameInvitationModel(Base):
+    __tablename__ = "game_invitations"
+    __table_args__ = (
+        Index("ix_game_invitation_recipient_status", "recipient_id", "status"),
+        Index("ix_game_invitation_sender_status", "sender_id", "status"),
+        Index("uq_game_invitation_active_key", "active_key", unique=True),
+    )
+
+    id = Column(String(36), primary_key=True)
+    sender_id = Column(String(36), nullable=False, index=True)
+    recipient_id = Column(String(36), nullable=False, index=True)
+    game_mode = Column(String(20), nullable=False)
+    status = Column(String(16), nullable=False, default="pending")
+    active_key = Column(String(100), nullable=True)
+    room_code = Column(String(10), nullable=True)
+    sender_player_id = Column(String(100), nullable=True)
+    recipient_player_id = Column(String(100), nullable=True)
+    created_at = Column(DateTime, default=get_utc_now, nullable=False)
+    expires_at = Column(DateTime, nullable=False)
+
+
+class PlayerReportModel(Base):
+    __tablename__ = "player_reports"
+    __table_args__ = (
+        Index("ix_player_report_reported_created", "reported_id", "created_at"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    reporter_id = Column(String(36), nullable=False, index=True)
+    reported_id = Column(String(36), nullable=False, index=True)
+    category = Column(String(24), nullable=False)
+    details = Column(Text, nullable=False, default="")
+    created_at = Column(DateTime, default=get_utc_now, nullable=False)
+
+
 def init_db():
     """Initializes tables in database."""
     Base.metadata.create_all(bind=engine)
@@ -236,7 +363,13 @@ def init_db():
     if "timezone" not in profile_columns:
         with engine.begin() as connection:
             connection.execute(text("ALTER TABLE player_profiles ADD COLUMN timezone VARCHAR(64)"))
+    invitation_columns = {column["name"] for column in inspect(engine).get_columns("game_invitations")}
+    if "active_key" not in invitation_columns:
+        with engine.begin() as connection:
+            connection.execute(text("ALTER TABLE game_invitations ADD COLUMN active_key VARCHAR(100)"))
     for index in MatchRecordModel.__table__.indexes:
+        index.create(bind=engine, checkfirst=True)
+    for index in GameInvitationModel.__table__.indexes:
         index.create(bind=engine, checkfirst=True)
 
 

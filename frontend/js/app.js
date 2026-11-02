@@ -30,6 +30,7 @@ class QuadChessApp {
         this.dailyPuzzles = new window.DailyPuzzleUI(this);
 
         this.currentView = "view-home";
+        this.social = new window.FOURXSocialController(this);
         this.initEventListeners();
         this.initSettingsValues();
         this.initDashboardData();
@@ -75,6 +76,7 @@ class QuadChessApp {
         }
 
         if (viewId === "view-profile") window.FOURXProfile?.refresh();
+        if (viewId === "view-friends") this.social?.onViewEntered();
         window.soundSystem.playClick();
     }
 
@@ -118,7 +120,7 @@ class QuadChessApp {
             this.showModal("classic-menu-modal");
         });
         document.getElementById("menu-item-friends")?.addEventListener("click", () => {
-            this.showModal("friends-lobby-modal");
+            this.switchView("view-friends");
         });
         document.getElementById("menu-item-ai")?.addEventListener("click", () => {
             this.showModal("ai-modal");
@@ -221,16 +223,6 @@ class QuadChessApp {
             this.showModal("join-room-modal");
         });
 
-        // Friends Lobby Modal Actions
-        document.getElementById("btn-friends-host")?.addEventListener("click", () => {
-            this.hideAllModals();
-            this.showModal("create-room-modal");
-        });
-        document.getElementById("btn-friends-join")?.addEventListener("click", () => {
-            this.hideAllModals();
-            this.showModal("join-room-modal");
-        });
-
         // Learn & Puzzles Modal Actions
         document.getElementById("btn-learn-puzzles")?.addEventListener("click", () => {
             this.hideAllModals();
@@ -239,14 +231,6 @@ class QuadChessApp {
         document.getElementById("btn-learn-rules")?.addEventListener("click", () => {
             this.hideAllModals();
             this.showModal("rules-modal");
-        });
-
-        // Friends Screen Actions
-        document.getElementById("btn-open-create-room")?.addEventListener("click", () => {
-            this.showModal("create-room-modal");
-        });
-        document.getElementById("btn-open-join-room")?.addEventListener("click", () => {
-            this.showModal("join-room-modal");
         });
 
         // Forms: Create / Join Room
@@ -621,6 +605,54 @@ class QuadChessApp {
         } catch (e) {
             console.error("Room join error:", e);
             this.showToast(`Error: ${e.message}`, true);
+        }
+    }
+
+    async joinSocialInvitation(launch) {
+        if (!launch?.room_code || !launch?.player_id) {
+            this.showToast("This invitation does not contain valid room access.", true);
+            return;
+        }
+        try {
+            if (launch.game_mode === "classic") {
+                let roomState = launch;
+                if (!launch.game_state) {
+                    const response = await fetch(
+                        `${window.CONFIG.getServerUrl()}/classic/rooms/${encodeURIComponent(launch.room_code)}`,
+                        { headers: { Authorization: `Bearer ${launch.player_id}` } }
+                    );
+                    roomState = await response.json();
+                    if (!response.ok) throw new Error(roomState.detail || "Could not load invited match.");
+                }
+                this.classicChess.enterRoom(
+                    { ...roomState, player_id: launch.player_id },
+                    "online"
+                );
+                return;
+            }
+            if (launch.game_mode !== "four_player") {
+                throw new Error("Unsupported invited game mode.");
+            }
+            this.roomCode = launch.room_code;
+            this.playerId = launch.player_id;
+            this.myRole = launch.player_role;
+            this.isOnlineMode = true;
+            this.gameMode = "online";
+            this.roomSettings = {
+                game_mode: "four_player",
+                is_private: true,
+                time_control: "unlimited",
+                max_players: 4,
+            };
+            this.lobbyReady = false;
+            this.hideAllModals();
+            this.saveFourPlayerSession();
+            this.setupOnlineUI();
+            this.wsClient.connect(this.roomCode, this.playerId);
+            this.switchView("view-room-lobby");
+            this.renderRoomLobby();
+        } catch (error) {
+            this.showToast(`Could not join invited match: ${error.message}`, true);
         }
     }
 
@@ -1152,16 +1184,6 @@ class QuadChessApp {
         });
         this.loadLeaderboard();
 
-        // Companion invites list
-        const friendsContainer = document.getElementById("friends-list-container");
-        if (friendsContainer) {
-            friendsContainer.innerHTML = `
-                <div class="match-item" style="text-align:center; padding: 20px 12px; border: 1px dashed rgba(255,255,255,0.1); border-radius: 8px;">
-                    <p style="color:var(--color-text-secondary); margin:0 0 10px 0; font-size: 0.88rem;">No companion sessions currently linked.</p>
-                    <button class="mini-action-btn primary" onclick="window.app.showModal('create-room-modal')">Host Arena & Share Code</button>
-                </div>
-            `;
-        }
     }
 
     async loadLeaderboard() {

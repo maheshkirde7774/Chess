@@ -547,6 +547,9 @@ async def start_classic_room(room_code: str, request: ClassicPlayerRequest, db: 
         raise HTTPException(status_code=400, detail="Both player seats must be filled before starting")
     room["status"] = "PLAYING"
     room["started_at"] = datetime.now(timezone.utc)
+    from app.social import presence_hub
+    for player in room["players"].values():
+        await presence_hub.mark_game(player.get("profile_id"), code, True, db)
     if room["game"].clock_started_at is None and room["game"].clocks["white"] is not None:
         room["game"].clock_started_at = time.time()
     _persist(db, code, room)
@@ -688,6 +691,10 @@ async def classic_websocket(
 
     manager_room = f"classic:{code}"
     await manager.connect(manager_room, player_id, websocket, accepted=True)
+    profile_id = room["players"][side].get("profile_id")
+    if room["status"] == "PLAYING":
+        from app.social import presence_hub
+        await presence_hub.mark_game(profile_id, code, True, db)
     room["players"][side]["connected"] = True
     if room["mode"] == "ai" and room["game"].clock_started_at is None:
         if room.get("started_at") is None:
@@ -718,6 +725,9 @@ async def classic_websocket(
                     await manager.broadcast_to_room(manager_room, {
                         "type": "GAME_STATE", "event": "TIMEOUT", **_public_state(code, room),
                     })
+                    from app.social import presence_hub
+                    for player in room["players"].values():
+                        await presence_hub.mark_game(player.get("profile_id"), code, False, db)
                 continue
             if len(raw_message) > 4096:
                     await manager.send_personal_message(manager_room, player_id, {
@@ -753,6 +763,9 @@ async def classic_websocket(
                     await manager.broadcast_to_room(manager_room, {
                         "type": "GAME_STATE", "event": "TIMEOUT", **_public_state(code, room),
                     })
+                    from app.social import presence_hub
+                    for player in room["players"].values():
+                        await presence_hub.mark_game(player.get("profile_id"), code, False, db)
                     if message_type == "PING":
                         await manager.send_personal_message(manager_room, player_id, {
                             "type": "PONG", "server_time": time.time(),
@@ -776,6 +789,9 @@ async def classic_websocket(
                         raise ValueError("Both player seats must be filled before starting")
                     room["status"] = "PLAYING"
                     room["started_at"] = datetime.now(timezone.utc)
+                    from app.social import presence_hub
+                    for player in room["players"].values():
+                        await presence_hub.mark_game(player.get("profile_id"), code, True, db)
                     if room["game"].clock_started_at is None and room["game"].clocks["white"] is not None:
                         room["game"].clock_started_at = time.time()
                 elif message_type == "READY":
@@ -828,6 +844,10 @@ async def classic_websocket(
                 await manager.broadcast_to_room(manager_room, {
                     "type": "GAME_STATE", "event": message_type, **_public_state(code, room),
                 })
+                if room["game"].result:
+                    from app.social import presence_hub
+                    for player in room["players"].values():
+                        await presence_hub.mark_game(player.get("profile_id"), code, False, db)
                 if message_type == "MOVE" and room["mode"] == "ai" and not room["game"].result:
                     await _run_ai_turn(code, room, db)
             except PermissionError as error:
@@ -842,6 +862,9 @@ async def classic_websocket(
         manager.disconnect(manager_room, player_id, websocket)
         if manager.is_player_connected(manager_room, player_id):
             return
+        if profile_id:
+            from app.social import presence_hub
+            await presence_hub.mark_game(profile_id, code, False, db)
         if side in room["players"]:
             room["players"][side]["connected"] = False
             _persist(db, code, room)

@@ -38,6 +38,7 @@ from app.ws_manager import manager
 from app.classic import router as classic_router
 from app.room_limits import enforce_room_rate_limit as _rate_limit
 from app.profiles import profile_from_authorization, record_completed_match, router as profile_router
+from app.social import presence_hub, router as social_router
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
@@ -168,6 +169,7 @@ app.add_middleware(
 
 app.include_router(classic_router)
 app.include_router(profile_router)
+app.include_router(social_router)
 
 # ----------------- REST ENDPOINTS -----------------
 
@@ -397,6 +399,8 @@ async def start_room(room_code: str, req: ResignRequest, db: Session = Depends(g
         raise HTTPException(status_code=400, detail="All player seats must be filled before starting")
     room_data["status"] = "PLAYING"
     room_data["started_at"] = datetime.now(timezone.utc)
+    for player in room_data["players"].values():
+        await presence_hub.mark_game(player.get("profile_id"), code, True, db)
     persist_room_state(db, code)
     await manager.broadcast_to_room(code, {
         "type": "GAME_STARTED", "room_code": code,
@@ -469,6 +473,8 @@ async def execute_move(room_code: str, req: MoveRequest, db: Session = Depends(g
     if engine.is_game_over:
         room_data["status"] = "COMPLETED"
         _record_completed_game(db, room_code, engine)
+        for player in room_data["players"].values():
+            await presence_hub.mark_game(player.get("profile_id"), room_code, False, db)
 
     persist_room_state(db, room_code)
 
@@ -508,6 +514,8 @@ async def resign_game(room_code: str, req: ResignRequest, db: Session = Depends(
     if engine.is_game_over:
         room_data["status"] = "COMPLETED"
         _record_completed_game(db, room_code, engine)
+        for player in room_data["players"].values():
+            await presence_hub.mark_game(player.get("profile_id"), room_code, False, db)
 
     persist_room_state(db, room_code)
 
@@ -598,6 +606,9 @@ async def websocket_endpoint(
     # Connect to room manager
     client_key = player_id
     await manager.connect(room_code, client_key, websocket, accepted=True)
+    profile_id = room_data["players"][role].get("profile_id")
+    if room_data["status"] == "PLAYING":
+        await presence_hub.mark_game(profile_id, room_code, True, db)
 
     # Send initial state snapshot to client
     await manager.send_personal_message(room_code, client_key, {
@@ -682,6 +693,10 @@ async def websocket_endpoint(
                     if engine.is_game_over:
                         room_data["status"] = "COMPLETED"
                         _record_completed_game(db, room_code, engine)
+                        for player in room_data["players"].values():
+                            await presence_hub.mark_game(
+                                player.get("profile_id"), room_code, False, db
+                            )
 
                     persist_room_state(db, room_code)
 
@@ -703,6 +718,10 @@ async def websocket_endpoint(
                         if engine.is_game_over:
                             room_data["status"] = "COMPLETED"
                             _record_completed_game(db, room_code, engine)
+                            for player in room_data["players"].values():
+                                await presence_hub.mark_game(
+                                    player.get("profile_id"), room_code, False, db
+                                )
                         persist_room_state(db, room_code)
 
                         await manager.broadcast_to_room(room_code, {
@@ -732,6 +751,10 @@ async def websocket_endpoint(
                     continue
                 room_data["status"] = "PLAYING"
                 room_data["started_at"] = datetime.now(timezone.utc)
+                for player in room_data["players"].values():
+                    await presence_hub.mark_game(
+                        player.get("profile_id"), room_code, True, db
+                    )
                 persist_room_state(db, room_code)
                 await manager.broadcast_to_room(room_code, {
                     "type": "GAME_STARTED", "room_code": room_code,
@@ -759,6 +782,7 @@ async def websocket_endpoint(
         manager.disconnect(room_code, client_key, websocket)
         if manager.is_player_connected(room_code, client_key):
             return
+        await presence_hub.mark_game(profile_id, room_code, False, db)
         if role in room_data["players"]:
             room_data["players"][role]["connected"] = False
             persist_room_state(db, room_code)

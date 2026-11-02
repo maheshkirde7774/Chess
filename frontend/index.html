@@ -182,9 +182,9 @@
                             <div class="card-content">
                                 <div class="card-header-row">
                                     <span class="card-title">Play with Friends</span>
-                                    <span class="card-badge badge-cyan">ROOM LOBBY</span>
+                                    <span class="card-badge badge-cyan">FOURX SOCIAL</span>
                                 </div>
-                                <p class="card-desc">Host a private 6-character room code or join a friend's active match arena.</p>
+                                <p class="card-desc">Find players, chat privately, and challenge friends to a match.</p>
                             </div>
                             <div class="card-action-arrow">→</div>
                         </button>
@@ -655,26 +655,127 @@
             <section id="view-friends" class="app-view">
                 <div class="dashboard-scrollable">
                     <div class="screen-hero">
-                        <h2>Friends & Challenges</h2>
-                        <p>Invite friends to Classic 1v1 or Four-Player Chess rooms</p>
+                        <span class="social-eyebrow">FOURX SOCIAL</span>
+                        <h2>Friends, chat & challenges</h2>
+                        <p>Find your next rival, catch up privately, or start a match together.</p>
+                        <span id="social-notification-count" class="social-total-badge hidden" aria-label="Unread notifications"></span>
                     </div>
 
-                    <div class="friends-action-bar">
-                        <button class="primary-play-btn" id="btn-open-create-room">
-                            <span>⚡</span> Create Friendly Arena
-                        </button>
-                        <button class="secondary-btn" id="btn-open-join-room">
-                            <span>🚀</span> Join with Room Code
-                        </button>
+                    <section class="social-panel social-search-panel">
+                        <div class="social-panel-heading">
+                            <div>
+                                <h3>Find players</h3>
+                                <p>Search public FOURX usernames to connect.</p>
+                            </div>
+                        </div>
+                        <form id="social-search-form" class="social-search-form">
+                            <label class="sr-only" for="social-player-search">Search usernames</label>
+                            <input id="social-player-search" type="search" minlength="2" maxlength="24"
+                                   autocomplete="off" placeholder="Search by username…">
+                            <button class="neon-btn primary-btn" type="submit">Search</button>
+                        </form>
+                        <div id="social-search-results" class="social-search-results" aria-live="polite"></div>
+                        <div id="social-profile-preview" class="social-profile-preview hidden" aria-live="polite"></div>
+                    </section>
+
+                    <div class="social-overview-grid">
+                        <section class="social-panel">
+                            <div class="social-panel-heading">
+                                <div>
+                                    <h3>Friends</h3>
+                                    <p id="social-friends-summary">Your FOURX circle.</p>
+                                </div>
+                            </div>
+                            <div class="social-subsection">
+                                <h4>Online now</h4>
+                                <div id="social-online-friends-list" class="friends-list" aria-live="polite"></div>
+                            </div>
+                            <div class="social-subsection">
+                                <h4>All friends</h4>
+                                <div class="friends-list" id="friends-list-container" aria-live="polite"></div>
+                            </div>
+                        </section>
+                        <section class="social-panel">
+                            <div class="social-panel-heading">
+                                <div>
+                                    <h3>Friend requests</h3>
+                                    <p>Incoming and outgoing connections.</p>
+                                </div>
+                            </div>
+                            <div class="social-subsection">
+                                <h4>Incoming</h4>
+                                <div id="social-incoming-requests" class="social-list"></div>
+                            </div>
+                            <div class="social-subsection">
+                                <h4>Outgoing</h4>
+                                <div id="social-outgoing-requests" class="social-list"></div>
+                            </div>
+                            <div class="social-subsection">
+                                <h4>Blocked players</h4>
+                                <div id="social-blocked-players" class="social-list"></div>
+                            </div>
+                        </section>
                     </div>
 
-                    <div class="section-header">
-                        <h3>Online Friends</h3>
-                        <span class="section-hint">3 Active</span>
-                    </div>
+                    <section class="social-panel social-chat-panel">
+                        <div class="social-panel-heading">
+                            <div>
+                                <h3>Private messages</h3>
+                                <p>Only you and your friend can access this chat.</p>
+                            </div>
+                        </div>
+                        <div class="social-chat-layout">
+                            <div id="social-chat-list" class="social-chat-list" aria-label="Conversations"></div>
+                            <div class="social-chat-window">
+                                <div id="social-chat-empty" class="social-chat-empty">
+                                    <span aria-hidden="true">✦</span>
+                                    <strong>Select a conversation</strong>
+                                    <p>Open a friend's chat to see your messages.</p>
+                                </div>
+                                <div id="social-chat-active" class="hidden">
+                                    <div id="social-chat-header" class="social-chat-header"></div>
+                                    <div id="social-chat-messages" class="social-chat-messages" aria-live="polite"></div>
+                                    <form id="social-message-form" class="social-message-form">
+                                        <div class="social-emoji-row" aria-label="Emoji shortcuts">
+                                            <button type="button" data-social-emoji="🙂" aria-label="Add smiling emoji">🙂</button>
+                                            <button type="button" data-social-emoji="😂" aria-label="Add laughing emoji">😂</button>
+                                            <button type="button" data-social-emoji="👏" aria-label="Add applause emoji">👏</button>
+                                            <button type="button" data-social-emoji="♟️" aria-label="Add chess pawn emoji">♟️</button>
+                                        </div>
+                                        <div class="social-message-compose">
+                                            <label class="sr-only" for="social-message-input">Message</label>
+                                            <input id="social-message-input" type="text" maxlength="2000"
+                                                   autocomplete="off" placeholder="Write a message…">
+                                            <button class="neon-btn primary-btn" type="submit">Send</button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
 
-                    <div class="friends-list" id="friends-list-container">
-                        <!-- Injected via app.js -->
+                    <div class="social-overview-grid">
+                        <section class="social-panel">
+                            <div class="social-panel-heading">
+                                <div>
+                                    <h3>Game invitations</h3>
+                                    <p>Classic 1v1 and Four-Player Chess.</p>
+                                </div>
+                            </div>
+                            <div id="social-invitations" class="social-list"></div>
+                        </section>
+                        <section class="social-panel">
+                            <div class="social-panel-heading">
+                                <div>
+                                    <h3>Notifications</h3>
+                                    <p>Requests, messages, and match updates.</p>
+                                </div>
+                                <button id="social-mark-notifications-read" class="mini-action-btn" type="button">
+                                    Mark read
+                                </button>
+                            </div>
+                            <div id="social-notifications" class="social-list"></div>
+                        </section>
                     </div>
                 </div>
             </section>
@@ -966,33 +1067,6 @@
             </div>
         </div>
 
-        <!-- Play with Friends Lobby Modal -->
-        <div id="friends-lobby-modal" class="game-modal hidden">
-            <div class="modal-card">
-                <div class="modal-header">
-                    <h2>PLAY WITH FRIENDS</h2>
-                    <button class="modal-close-btn">✕</button>
-                </div>
-                <div class="modal-body menu-options">
-                    <p style="color: var(--color-text-secondary); font-size: 0.85rem; margin-bottom: 12px;">Host a private room code or enter your friend's room code to play together:</p>
-                    <button id="btn-friends-host" class="neon-btn cyan-btn">
-                        <span class="btn-icon">⚡</span>
-                        <div class="btn-text">
-                            <strong>Host Private Arena</strong>
-                            <small>Generate a 6-digit room code to share</small>
-                        </div>
-                    </button>
-                    <button id="btn-friends-join" class="neon-btn magenta-btn">
-                        <span class="btn-icon">🚀</span>
-                        <div class="btn-text">
-                            <strong>Join with Code</strong>
-                            <small>Enter a companion's 6-digit room code</small>
-                        </div>
-                    </button>
-                </div>
-            </div>
-        </div>
-
         <!-- Learn & Puzzles Modal -->
         <div id="learn-modal" class="game-modal hidden">
             <div class="modal-card">
@@ -1252,6 +1326,7 @@
     <script src="js/ui.js"></script>
     <script src="js/ws-client.js"></script>
     <script src="js/profile.js"></script>
+    <script src="js/social.js"></script>
     <script src="js/daily-puzzles.js"></script>
     <script src="js/classic-chess.js"></script>
     <script src="js/app.js"></script>
