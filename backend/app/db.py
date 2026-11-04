@@ -84,6 +84,7 @@ class PlayerProfileModel(Base):
     is_suspended = Column(Boolean, default=False, nullable=False)
     deleted_at = Column(DateTime, nullable=True)
     timezone = Column(String(64), nullable=True)
+    customization_json = Column(Text, nullable=False, default="{}")
 
 
 class MatchRecordModel(Base):
@@ -367,6 +368,11 @@ def init_db():
     if "timezone" not in profile_columns:
         with engine.begin() as connection:
             connection.execute(text("ALTER TABLE player_profiles ADD COLUMN timezone VARCHAR(64)"))
+    if "customization_json" not in profile_columns:
+        with engine.begin() as connection:
+            connection.execute(text(
+                "ALTER TABLE player_profiles ADD COLUMN customization_json TEXT NOT NULL DEFAULT '{}'"
+            ))
     invitation_columns = {column["name"] for column in inspect(engine).get_columns("game_invitations")}
     if "active_key" not in invitation_columns:
         with engine.begin() as connection:

@@ -46,7 +46,7 @@
                     <span id="net-status-dot" class="status-dot offline"></span>
                     <span id="net-status-label">OFFLINE</span>
                 </div>
-                <button id="btn-membership-header" class="icon-btn vip-crown-btn" title="Grandmaster Pass">👑</button>
+                <button id="btn-membership-header" class="icon-btn vip-crown-btn" title="Customization Armory">👑</button>
                 <button id="btn-sound-toggle" class="icon-btn" title="Toggle Sound FX">🔊</button>
                 <button id="btn-nav-rules" class="icon-btn" title="Official Rules">?</button>
                 <button id="btn-nav-settings" class="icon-btn" title="Settings">⚙</button>
@@ -892,6 +892,54 @@
             </section>
 
             <!-- VIEW 6: PROFILE & STATS SCREEN -->
+            <section id="view-customization" class="app-view">
+                <div class="dashboard-scrollable customization-scrollable">
+                    <div class="customization-heading">
+                        <div>
+                            <span class="customization-eyebrow">FOURX ARMORY</span>
+                            <h2>Make the board yours</h2>
+                            <p>Personalize your arena, pieces, profile, and play experience.</p>
+                        </div>
+                        <div class="customization-heading-actions">
+                            <button id="customization-platform-settings" class="neon-btn secondary-btn" type="button">Platform settings</button>
+                            <button id="customization-back" class="neon-btn secondary-btn" type="button">Back to FOURX</button>
+                        </div>
+                    </div>
+                    <div class="customization-layout">
+                        <aside class="customization-preview-card">
+                            <div class="customization-preview-heading">
+                                <span class="customization-eyebrow">LIVE PREVIEW</span>
+                                <span id="customization-preview-label">Classic Wood · Classic Staunton</span>
+                            </div>
+                            <div id="customization-board-preview" class="customization-preview-board"
+                                 data-board-theme="classic_wood" data-piece-set="staunton"
+                                 role="img" aria-label="Live chessboard theme and piece preview"></div>
+                            <div class="customization-avatar-summary">
+                                <span id="customization-avatar-preview" class="customization-avatar-preview">♘</span>
+                                <div><strong>Profile avatar</strong><small>Shown on your player profile</small></div>
+                            </div>
+                        </aside>
+                        <div class="customization-editor">
+                            <div id="customization-tabs" class="customization-tabs" role="tablist" aria-label="Customization categories">
+                                <button type="button" role="tab" data-customization-tab="board" aria-selected="true">Board</button>
+                                <button type="button" role="tab" data-customization-tab="pieces" aria-selected="false">Pieces</button>
+                                <button type="button" role="tab" data-customization-tab="avatars" aria-selected="false">Avatars</button>
+                                <button type="button" role="tab" data-customization-tab="sounds" aria-selected="false">Sounds</button>
+                                <button type="button" role="tab" data-customization-tab="animations" aria-selected="false">Animations</button>
+                            </div>
+                            <div id="customization-panel" class="customization-panel" role="tabpanel" tabindex="0"></div>
+                            <div class="customization-footer">
+                                <p id="customization-status" aria-live="polite">Preview changes, then apply to save them.</p>
+                                <div>
+                                    <button id="customization-reset" class="neon-btn secondary-btn" type="button">Reset to default</button>
+                                    <button id="customization-apply" class="neon-btn primary-btn" type="button">Apply</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
             <section id="view-profile" class="app-view">
                 <div class="dashboard-scrollable">
                     <p id="profile-load-error" class="profile-load-error hidden" role="alert"></p>
@@ -990,43 +1038,16 @@
                 </div>
             </section>
 
-            <!-- VIEW 7: MEMBERSHIP & THEMES STORE -->
+            <!-- VIEW 7: CUSTOMIZATION ARMORY -->
             <section id="view-membership" class="app-view">
                 <div class="dashboard-scrollable">
                     <div class="membership-vip-banner">
-                        <div class="vip-crown-large">👑</div>
-                        <h2>Grandmaster Pass</h2>
-                        <p>Unlock the ultimate tournament experience with premium board finishes, luxury Staunton piece styles, deep cloud engine analysis, and an ad-free interface.</p>
-                        <button class="vip-upgrade-btn" id="btn-activate-pass">
-                            Unlock Grandmaster Tier
+                        <div class="vip-crown-large">♛</div>
+                        <h2>Customization Armory</h2>
+                        <p>Board themes, piece styles, and avatar collections unlock through verified profile XP. There are no purchases or simulated ownership states.</p>
+                        <button class="vip-upgrade-btn" id="btn-open-customization">
+                            Preview customizations
                         </button>
-                    </div>
-
-                    <div class="section-header">
-                        <h3>Board Finishes</h3>
-                    </div>
-
-                    <div class="themes-grid">
-                        <div class="theme-card active" data-theme="slate">
-                            <div class="theme-preview theme-slate-prev"></div>
-                            <h4>Tournament Slate</h4>
-                            <span class="theme-status active-status">Applied</span>
-                        </div>
-                        <div class="theme-card" data-theme="wood">
-                            <div class="theme-preview theme-wood-prev"></div>
-                            <h4>Walnut & Maple</h4>
-                            <span class="theme-status">VIP Free</span>
-                        </div>
-                        <div class="theme-card" data-theme="carbon">
-                            <div class="theme-preview theme-carbon-prev"></div>
-                            <h4>Obsidian Carbon</h4>
-                            <span class="theme-status">VIP Free</span>
-                        </div>
-                        <div class="theme-card" data-theme="marble">
-                            <div class="theme-preview theme-marble-prev"></div>
-                            <h4>Royal Carrara Marble</h4>
-                            <span class="theme-status">VIP Free</span>
-                        </div>
                     </div>
                 </div>
             </section>
@@ -1443,6 +1464,7 @@
     <script src="js/ui.js"></script>
     <script src="js/ws-client.js"></script>
     <script src="js/profile.js"></script>
+    <script src="js/customization.js"></script>
     <script src="js/social.js"></script>
     <script src="js/daily-puzzles.js"></script>
     <script src="js/classic-chess.js"></script>

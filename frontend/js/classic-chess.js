@@ -11,6 +11,7 @@ class ClassicChessUI {
         this.players = {};
         this.ai = {};
         this.selectedSquare = null;
+        this.lastRenderedMoveCount = 0;
         this.socket = null;
         this.socketEnabled = false;
         this.reconnectTimeout = null;
@@ -395,6 +396,9 @@ class ClassicChessUI {
     }
 
     render(data) {
+        const wasPlaying = this.roomStatus === "PLAYING";
+        const wasCompleted = this.roomStatus === "COMPLETED";
+        const previousMoveCount = this.state?.moves?.length || 0;
         this.state = data.game_state || this.state;
         this.players = data.players || this.players;
         this.roomStatus = data.status || this.state?.status || this.roomStatus;
@@ -403,6 +407,18 @@ class ClassicChessUI {
         this.selectedSquare = null;
         if (!this.state) return;
         const status = data.status || this.state.status;
+        if (this.state.moves.length < previousMoveCount) this.lastRenderedMoveCount = 0;
+        if (status === "PLAYING" && !wasPlaying) window.soundSystem.playGameStart();
+        if (this.state.moves.length > previousMoveCount) {
+            const lastMove = this.state.moves[this.state.moves.length - 1];
+            if (lastMove.san?.includes("x")) window.soundSystem.playCapture();
+            else window.soundSystem.playMove();
+            if (this.state.in_check) window.soundSystem.playCheck();
+        }
+        if (status === "COMPLETED" && !wasCompleted) {
+            if (this.state.termination === "checkmate") window.soundSystem.playCheckmate();
+            else window.soundSystem.playVictory("completion");
+        }
         this.ai = data.ai || this.ai || {};
         const thinking = data.ai_thinking === true;
         document.getElementById("classic-ai-thinking")?.classList.toggle(
@@ -466,6 +482,16 @@ class ClassicChessUI {
 
     renderBoard() {
         const container = document.getElementById("classic-board");
+        const moveCount = this.state.moves.length;
+        const lastMove = this.state.moves[moveCount - 1]?.uci;
+        const shouldAnimate = moveCount > this.lastRenderedMoveCount
+            && window.FOURXCustomization?.preferences?.animations?.movement !== false
+            && !window.FOURXCustomization?.preferences?.animations?.reduced_motion
+            && !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+        const originRect = shouldAnimate && lastMove
+            ? container.querySelector(`[data-square="${lastMove.slice(0, 2)}"]`)?.getBoundingClientRect()
+            : null;
+        this.lastRenderedMoveCount = moveCount;
         const ranks = this.state.fen.split(" ")[0].split("/");
         const board = [];
         for (let rankIndex = 0; rankIndex < 8; rankIndex++) {
@@ -479,7 +505,7 @@ class ClassicChessUI {
                 }
             }
         }
-        const last = this.state.moves[this.state.moves.length - 1]?.uci;
+        const last = lastMove;
         const lastSquares = last ? [last.slice(0, 2), last.slice(2, 4)] : [];
         const selectedMoves = this.state.legal_moves.filter(move => move.from === this.selectedSquare);
         const legalTargets = new Set(selectedMoves.map(move => move.to));
@@ -501,7 +527,7 @@ class ClassicChessUI {
                     ? `<span class="${piece ? "classic-legal-capture" : "classic-legal-dot"}"></span>`
                     : "";
                 html += `<button type="button" class="${classes.join(" ")}" data-square="${squareName}" role="gridcell" aria-label="${squareName}${piece ? ` ${piece}` : ""}">
-                    ${piece ? `<svg class="classic-piece ${piece === piece.toUpperCase() ? "white" : "black"}" viewBox="0 0 48 48" aria-hidden="true"><text x="50%" y="50%" dominant-baseline="central" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="44">${symbols[piece]}</text></svg>` : ""}
+                    ${piece ? `<svg class="classic-piece ${piece === piece.toUpperCase() ? "white" : "black"}" data-symbol="${symbols[piece]}" viewBox="0 0 48 48" aria-hidden="true"><text x="50%" y="50%" dominant-baseline="central" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="44">${symbols[piece]}</text></svg>` : ""}
                     ${marker}
                     ${file === 0 ? `<span class="classic-coordinate rank-label">${8 - rankIndex}</span>` : ""}
                     ${rankIndex === 7 ? `<span class="classic-coordinate file-label">${"abcdefgh"[file]}</span>` : ""}
@@ -513,6 +539,18 @@ class ClassicChessUI {
             piece.style.width = "78%";
             piece.style.height = "78%";
         });
+        if (shouldAnimate && lastMove && originRect) {
+            const destination = container.querySelector(`[data-square="${lastMove.slice(2, 4)}"] .classic-piece`);
+            const destinationRect = destination?.getBoundingClientRect();
+            if (destination && destinationRect) {
+                destination.style.transition = "none";
+                destination.style.transform = `translate(${originRect.left - destinationRect.left}px, ${originRect.top - destinationRect.top}px)`;
+                requestAnimationFrame(() => {
+                    destination.style.transition = "transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1)";
+                    destination.style.transform = "";
+                });
+            }
+        }
     }
 
     selectSquare(square) {
@@ -620,6 +658,7 @@ class ClassicChessUI {
             overlay.classList.add("hidden");
             return;
         }
+        overlay.classList.add("celebration-effect");
         const labels = {
             checkmate: "by checkmate",
             stalemate: "by stalemate",

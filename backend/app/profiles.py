@@ -8,7 +8,7 @@ import threading
 import time
 import uuid
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 from urllib.error import URLError
 from urllib.request import Request as URLRequest, urlopen
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -38,7 +38,36 @@ _leaderboard_cache: dict[tuple[Any, ...], tuple[float, dict[str, Any]]] = {}
 _leaderboard_cache_lock = threading.Lock()
 LEADERBOARD_CACHE_SECONDS = 30
 
-AVATARS = {"king", "queen", "rook", "bishop", "knight", "pawn"}
+AVATAR_UNLOCK_XP = {
+    "king": 0,
+    "queen": 0,
+    "rook": 0,
+    "bishop": 0,
+    "knight": 0,
+    "pawn": 0,
+    "dragon": 200,
+    "phoenix": 400,
+    "cyber_cat": 600,
+    "royal_lion": 800,
+}
+AVATARS = set(AVATAR_UNLOCK_XP)
+BOARD_THEME_UNLOCK_XP = {
+    "classic_wood": 0,
+    "marble": 0,
+    "midnight": 100,
+    "ocean": 150,
+    "emerald": 300,
+    "royal_gold": 500,
+    "neon_cyber": 800,
+    "minimal_light": 0,
+}
+PIECE_SET_UNLOCK_XP = {
+    "staunton": 0,
+    "modern": 0,
+    "minimal": 100,
+    "royal": 300,
+    "futuristic": 600,
+}
 PIECE_VALUES = {
     chess.PAWN: 1,
     chess.KNIGHT: 3,
@@ -47,6 +76,45 @@ PIECE_VALUES = {
     chess.QUEEN: 9,
     chess.KING: 0,
 }
+
+
+class SoundEventPreferences(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    move: bool = True
+    capture: bool = True
+    check: bool = True
+    checkmate: bool = True
+    start: bool = True
+    completion: bool = True
+    notification: bool = True
+    ui: bool = True
+
+
+class SoundPreferences(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    enabled: bool = True
+    volume: float = Field(default=0.65, ge=0, le=1)
+    events: SoundEventPreferences = Field(default_factory=SoundEventPreferences)
+
+
+class AnimationPreferences(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    movement: bool = True
+    board_transition: bool = True
+    move_highlighting: bool = True
+    celebrations: bool = True
+    reduced_motion: bool = False
+
+
+class CustomizationPreferences(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    board_theme: Literal[
+        "classic_wood", "marble", "midnight", "ocean",
+        "emerald", "royal_gold", "neon_cyber", "minimal_light",
+    ] = "classic_wood"
+    piece_set: Literal["staunton", "modern", "minimal", "royal", "futuristic"] = "staunton"
+    sound: SoundPreferences = Field(default_factory=SoundPreferences)
+    animations: AnimationPreferences = Field(default_factory=AnimationPreferences)
 
 
 class ProfileUpdate(BaseModel):
@@ -252,6 +320,12 @@ def update_profile(
     if update.avatar is not None:
         if update.avatar not in AVATARS:
             raise HTTPException(status_code=422, detail="Select an available avatar")
+        required_xp = AVATAR_UNLOCK_XP[update.avatar]
+        if profile.xp < required_xp:
+            raise HTTPException(
+                status_code=403,
+                detail=f"That avatar requires {required_xp} XP to unlock",
+            )
         profile.avatar = update.avatar
     if update.timezone is not None and update.timezone != (profile.timezone or "UTC"):
         if db.query(PlayerPuzzleAttemptModel.id).filter(
@@ -270,6 +344,51 @@ def update_profile(
     db.refresh(profile)
     _invalidate_leaderboard_cache()
     return _profile_payload(db, profile)
+
+
+@router.get("/api/profile/customization")
+def get_customization(
+    authorization: Optional[str] = Header(default=None),
+    db: Session = Depends(get_db),
+):
+    profile = _authenticated_profile(authorization, db)
+    stored = json.loads(profile.customization_json or "{}")
+    return {
+        **CustomizationPreferences.model_validate(stored).model_dump(),
+        "configured": bool(stored),
+    }
+
+
+@router.put("/api/profile/customization")
+def update_customization(
+    preferences: CustomizationPreferences,
+    authorization: Optional[str] = Header(default=None),
+    db: Session = Depends(get_db),
+):
+    profile = _authenticated_profile(authorization, db)
+    required_theme_xp = BOARD_THEME_UNLOCK_XP[preferences.board_theme]
+    required_piece_xp = PIECE_SET_UNLOCK_XP[preferences.piece_set]
+    if profile.xp < required_theme_xp:
+        raise HTTPException(
+            status_code=403,
+            detail=f"This board theme requires {required_theme_xp} XP to unlock",
+        )
+    if profile.xp < required_piece_xp:
+        raise HTTPException(
+            status_code=403,
+            detail=f"This piece set requires {required_piece_xp} XP to unlock",
+        )
+    profile.customization_json = json.dumps(
+        preferences.model_dump(), sort_keys=True, separators=(",", ":")
+    )
+    db.commit()
+    db.refresh(profile)
+    return {
+        **CustomizationPreferences.model_validate(
+            json.loads(profile.customization_json)
+        ).model_dump(),
+        "configured": True,
+    }
 
 
 @router.get("/api/profile/matches")

@@ -36,7 +36,7 @@
 | **🧩 Daily Classic Puzzles** | A real Lichess daily puzzle, server-validated legal solution, progressive hints, difficulty-based XP, timezone-aware streaks, and an archive. Four-Player puzzles are marked as future work until they can be authoritatively validated. |
 | **🏆 Global Leaderboards** | Competitive Elo rankings, win-rate metrics, leagues (Diamond & Master), and player profile statistics. |
 | **🔊 Acoustic Chess Audio** | Authentic acoustic wood piece impacts, double capture knocks, harmonic check chimes, and tournament victory fanfares synthesized in Web Audio. |
-| **💳 Grandmaster VIP & Themes** | Board finish customizer (Tournament Slate, Walnut Wood, Obsidian Carbon, Carrara Marble) and reserved clean AdMob banner container. |
+| **🎨 FOURX Customization Armory** | Eight board themes, five piece styles, XP-unlocked avatar collections, procedural sound controls, motion preferences, live previews, and profile-saved settings. No real-money purchases. |
 
 ---
 
@@ -149,6 +149,7 @@ Chess/
 │   ├── js/
 │   │   ├── config.js            # Dynamic server URL detection & user preferences
 │   │   ├── audio.js             # Synthesized Web Audio API sound generator
+│   │   ├── customization.js     # Board, piece, avatar, sound, and animation preferences
 │   │   ├── chess-engine-client.js # Client-side engine mirror for snappy local play & highlights
 │   │   ├── ui.js                # SVG vector pieces, 14x14 DOM rendering, HUD modals
 │   │   ├── ws-client.js         # WebSocket client with heartbeat and auto-reconnect
@@ -221,6 +222,8 @@ Private matches never appear in the live or replay listings. Room create/join re
 ## Player Profiles & Progression
 
 The Profile screen creates a device-scoped profile automatically. Its opaque bearer credential is stored in this browser's local storage and is returned only during profile creation; it is not a password account and cannot be recovered or transferred to another device. Users can choose a preset avatar and edit a unique 3–20 character username. Match attribution uses the profile credential at room creation/join, while game actions continue to require the existing room player credential.
+
+The Customization Armory supports Classic Wood, Marble, Midnight, Ocean, Emerald, Royal Gold, Neon Cyber, and Minimal Light boards; Classic Staunton, Modern, Minimal, Royal, and Futuristic piece styles; and six default plus four XP-unlocked avatars. Theme, piece, and avatar unlocks are derived from server-verified profile XP (no spending or simulated ownership). Sound event toggles and volume use the existing procedural Web Audio engine; animation controls include reduced motion. Settings are stored locally and synchronized to the authenticated device profile. Cross-device profile transfer is unavailable because FOURX currently has no transferable account login. Custom image uploads and background music are not offered because no secure image-storage or music system exists.
 
 Only server-completed matches are recorded. Abandoned/waiting games and local pass-and-play do not change a profile because their outcomes are not server-verified. A completed match awards 10 XP, plus 15 XP for a win or 5 XP for a draw. Level 1 requires 100 XP, with each subsequent level requiring 100 more XP than the prior level. A completed Classic daily puzzle also awards server-calculated XP. Classic AI matches award XP and count in stats/history but are unrated. Classic online rating uses Elo (initial rating 1200, K=32); draw scores are 0.5. Four-Player online rating starts at 1200 and uses a documented multiplayer Elo variant (K=24 against the average opponents' rating; the winner scores 1, each other player 0, and a draw gives each 0.5). Ratings update only when every participant in that online match is linked to a different profile; the two modes have separate rating histories.
 
@@ -295,7 +298,9 @@ cd android
 | `GET` | `/api/history` | Match log of completed games |
 | `POST` | `/api/profile` | Create a device profile and receive its one-time bearer credential |
 | `GET` | `/api/profile` | Read the authenticated profile, ratings, stats, level, and achievements |
-| `PATCH` | `/api/profile` | Update the authenticated profile username or preset avatar |
+| `PATCH` | `/api/profile` | Update the authenticated profile username or XP-unlocked avatar |
+| `GET` | `/api/profile/customization` | Read private customization preferences for the authenticated profile |
+| `PUT` | `/api/profile/customization` | Save preferences after server-side XP unlock validation |
 | `GET` | `/api/profile/matches` | Read authenticated match history; optional `game_mode` and `result` filters |
 | `GET` | `/api/puzzles/daily` | Get today's authenticated, timezone-assigned Classic puzzle without its solution |
 | `POST` | `/api/puzzles/daily/move` | Submit a UCI move for server-side legality and solution verification |

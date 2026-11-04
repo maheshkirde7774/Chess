@@ -58,6 +58,7 @@ class QuadChessApp {
         }
         if (viewId === "view-puzzles") this.dailyPuzzles?.onViewEntered();
         if (viewId === "view-live-games") this.spectator?.onLobbyEntered();
+        if (viewId === "view-customization") window.FOURXCustomization?.onOpen();
 
         // Update Bottom Nav active state
         document.querySelectorAll(".nav-tab-btn").forEach(btn => {
@@ -115,7 +116,9 @@ class QuadChessApp {
             this.switchView("view-membership");
         });
         document.getElementById("btn-nav-rules")?.addEventListener("click", () => this.showModal("rules-modal"));
-        document.getElementById("btn-nav-settings")?.addEventListener("click", () => this.showModal("settings-modal"));
+        document.getElementById("btn-nav-settings")?.addEventListener("click", () => {
+            this.switchView("view-customization");
+        });
         document.getElementById("btn-sound-toggle")?.addEventListener("click", () => {
             const isMuted = window.soundSystem.toggleMute();
             this.updateSoundIcon(!isMuted);
@@ -144,7 +147,7 @@ class QuadChessApp {
             this.switchView("view-profile");
         });
         document.getElementById("menu-item-settings")?.addEventListener("click", () => {
-            this.showModal("settings-modal");
+            this.switchView("view-customization");
         });
 
         // Quick Play Hero Banner & Legacy Card Fallbacks
@@ -336,8 +339,11 @@ class QuadChessApp {
             }
             const soundToggle = document.getElementById("sound-toggle-chk");
             if (soundToggle) {
-                window.CONFIG.setAudioEnabled(soundToggle.checked);
-                window.soundSystem.muted = !soundToggle.checked;
+                window.soundSystem.applyPreferences({
+                    ...window.soundSystem.preferences,
+                    enabled: soundToggle.checked,
+                });
+                window.FOURXCustomization?.onSoundEnabledChanged(soundToggle.checked);
                 this.updateSoundIcon(soundToggle.checked);
             }
             const passToggle = document.getElementById("pass-prompt-chk");
@@ -352,20 +358,8 @@ class QuadChessApp {
 
         document.getElementById("btn-test-backend")?.addEventListener("click", () => this.testBackendConnection());
 
-        // Theme Switcher
-        document.querySelectorAll(".theme-card").forEach(card => {
-            card.addEventListener("click", (e) => {
-                document.querySelectorAll(".theme-card").forEach(c => c.classList.remove("active"));
-                e.currentTarget.classList.add("active");
-                const theme = e.currentTarget.dataset.theme;
-                this.applyBoardTheme(theme);
-            });
-        });
-
-        // VIP Upgrade Button
-        document.getElementById("btn-activate-pass")?.addEventListener("click", () => {
-            this.showToast("Grandmaster Pass Activated! All themes & perks unlocked.");
-            window.soundSystem.playVictory();
+        document.getElementById("btn-open-customization")?.addEventListener("click", () => {
+            this.switchView("view-customization");
         });
         document.getElementById("link-upgrade-adfree")?.addEventListener("click", (e) => {
             e.preventDefault();
@@ -387,31 +381,6 @@ class QuadChessApp {
         if (rotateToggle) rotateToggle.checked = window.CONFIG.isAutoRotateEnabled();
     }
 
-    applyBoardTheme(theme) {
-        const board = document.getElementById("chessboard");
-        if (!board) return;
-
-        if (theme === "wood") {
-            board.style.setProperty("--board-dark", "#8b5a2b");
-            board.style.setProperty("--board-light", "#d2b48c");
-            board.style.setProperty("--board-rim", "#4a2f13");
-        } else if (theme === "carbon") {
-            board.style.setProperty("--board-dark", "#1e222b");
-            board.style.setProperty("--board-light", "#383f4f");
-            board.style.setProperty("--board-rim", "#12141a");
-        } else if (theme === "marble") {
-            board.style.setProperty("--board-dark", "#334155");
-            board.style.setProperty("--board-light", "#f1f5f9");
-            board.style.setProperty("--board-rim", "#1e293b");
-        } else {
-            // Default slate
-            board.style.removeProperty("--board-dark");
-            board.style.removeProperty("--board-light");
-            board.style.removeProperty("--board-rim");
-        }
-        this.showToast(`Applied ${theme.toUpperCase()} Board Theme`);
-    }
-
     /* ==================== GAME MODES ==================== */
 
     startLocalGame() {
@@ -431,6 +400,7 @@ class QuadChessApp {
         this.ui.render();
 
         this.switchView("view-game");
+        window.soundSystem.playGameStart();
         this.showToast("Pass & Play Match Initialized");
     }
 
@@ -462,6 +432,7 @@ class QuadChessApp {
         this.ui.render();
 
         this.switchView("view-game");
+        window.soundSystem.playGameStart();
         this.showToast(`AI Match Started (${diffLabels[difficulty]})`);
     }
 
@@ -484,6 +455,7 @@ class QuadChessApp {
         this.ui.render();
 
         this.switchView("view-game");
+        window.soundSystem.playGameStart();
         this.showToast("2v2 Team Battle Initialized! Ally: Lime (North)");
     }
 
@@ -501,6 +473,7 @@ class QuadChessApp {
         this.ui.render();
 
         this.switchView("view-game");
+        window.soundSystem.playGameStart();
         this.showToast(`Tactical Challenge: ${puzzle.description}`);
     }
 
@@ -960,6 +933,7 @@ class QuadChessApp {
             if (data.game_state) this.ui.render(data.game_state);
             this.renderRoomLobby({ players: this.onlinePlayers, status: "PLAYING" });
             this.switchView("view-game");
+            window.soundSystem.playGameStart();
             this.showToast("The match has started.");
         } else if (data.type === "PLAYER_LEFT") {
             this.onlinePlayers = data.players || {};
@@ -1279,10 +1253,9 @@ class QuadChessApp {
         rank.textContent = `#${leader.rank}`;
         const player = document.createElement("div");
         player.className = "lb-player";
-        const icons = { king: "♔", queen: "♕", rook: "♖", bishop: "♗", knight: "♘", pawn: "♙" };
         const avatar = document.createElement("span");
         avatar.className = "lb-avatar";
-        avatar.textContent = icons[leader.avatar] || "♘";
+        avatar.textContent = window.FOURX_AVATAR_ICONS[leader.avatar] || "♘";
         const view = document.createElement("button");
         view.type = "button";
         view.className = "lb-profile-link";
@@ -1413,6 +1386,7 @@ class QuadChessApp {
         toast.textContent = msg;
 
         container.appendChild(toast);
+        window.soundSystem.playNotification();
         setTimeout(() => toast.remove(), 3500);
     }
 

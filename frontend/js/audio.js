@@ -7,7 +7,22 @@
 class SoundSystem {
     constructor() {
         this.ctx = null;
+        this.masterGain = null;
         this.muted = !window.CONFIG.isAudioEnabled();
+        this.preferences = {
+            enabled: !this.muted,
+            volume: 0.65,
+            events: {
+                move: true,
+                capture: true,
+                check: true,
+                checkmate: true,
+                start: true,
+                completion: true,
+                notification: true,
+                ui: true,
+            },
+        };
     }
 
     _initContext() {
@@ -15,6 +30,9 @@ class SoundSystem {
             const AudioContext = window.AudioContext || window.webkitAudioContext;
             if (AudioContext) {
                 this.ctx = new AudioContext();
+                this.masterGain = this.ctx.createGain();
+                this.masterGain.gain.value = this.preferences.volume;
+                this.masterGain.connect(this.ctx.destination);
             }
         }
         if (this.ctx && this.ctx.state === "suspended") {
@@ -22,12 +40,40 @@ class SoundSystem {
         }
     }
 
+    isEventEnabled(event) {
+        return !this.muted && this.preferences.enabled && this.preferences.events[event] !== false;
+    }
+
+    applyPreferences(preferences) {
+        const events = { ...this.preferences.events, ...(preferences.events || {}) };
+        const requestedVolume = Number(preferences.volume ?? this.preferences.volume);
+        this.preferences = {
+            ...this.preferences,
+            ...preferences,
+            events,
+            volume: Number.isFinite(requestedVolume)
+                ? Math.max(0, Math.min(1, requestedVolume))
+                : this.preferences.volume,
+        };
+        this.muted = !this.preferences.enabled;
+        window.CONFIG.setAudioEnabled(this.preferences.enabled);
+        if (this.masterGain && this.ctx) {
+            this.masterGain.gain.setTargetAtTime(
+                this.preferences.volume,
+                this.ctx.currentTime,
+                0.015
+            );
+        }
+    }
+
     toggleMute() {
         this.muted = !this.muted;
+        this.preferences.enabled = !this.muted;
         window.CONFIG.setAudioEnabled(!this.muted);
         if (!this.muted) {
             this.playMove();
         }
+        window.FOURXCustomization?.onSoundEnabledChanged(!this.muted);
         return this.muted;
     }
 
@@ -35,7 +81,7 @@ class SoundSystem {
      * Authentic piece move: acoustic wooden tap/thud
      */
     playMove() {
-        if (this.muted) return;
+        if (!this.isEventEnabled("move")) return;
         this._initContext();
         if (!this.ctx) return;
 
@@ -52,7 +98,7 @@ class SoundSystem {
         gain.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
 
         osc.connect(gain);
-        gain.connect(this.ctx.destination);
+        gain.connect(this.masterGain);
         osc.start(now);
         osc.stop(now + 0.09);
 
@@ -67,7 +113,7 @@ class SoundSystem {
         clickGain.gain.exponentialRampToValueAtTime(0.001, now + 0.045);
 
         clickOsc.connect(clickGain);
-        clickGain.connect(this.ctx.destination);
+        clickGain.connect(this.masterGain);
         clickOsc.start(now);
         clickOsc.stop(now + 0.045);
     }
@@ -76,7 +122,7 @@ class SoundSystem {
      * Authentic capture sound: heavier double impact with piece displacement
      */
     playCapture() {
-        if (this.muted) return;
+        if (!this.isEventEnabled("capture")) return;
         this._initContext();
         if (!this.ctx) return;
 
@@ -93,7 +139,7 @@ class SoundSystem {
         gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.13);
 
         osc1.connect(gain1);
-        gain1.connect(this.ctx.destination);
+        gain1.connect(this.masterGain);
         osc1.start(now);
         osc1.stop(now + 0.13);
 
@@ -111,7 +157,7 @@ class SoundSystem {
             gain2.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
 
             osc2.connect(gain2);
-            gain2.connect(this.ctx.destination);
+            gain2.connect(this.masterGain);
             osc2.start(t);
             osc2.stop(t + 0.08);
         }, 35);
@@ -121,7 +167,7 @@ class SoundSystem {
      * Check warning: elegant dual harmonic bell chime
      */
     playCheck() {
-        if (this.muted) return;
+        if (!this.isEventEnabled("check")) return;
         this._initContext();
         if (!this.ctx) return;
 
@@ -140,7 +186,7 @@ class SoundSystem {
             gain.gain.exponentialRampToValueAtTime(0.001, start + 0.28);
 
             osc.connect(gain);
-            gain.connect(this.ctx.destination);
+            gain.connect(this.masterGain);
             osc.start(start);
             osc.stop(start + 0.28);
         });
@@ -150,7 +196,7 @@ class SoundSystem {
      * Refined subtle button click
      */
     playClick() {
-        if (this.muted) return;
+        if (!this.isEventEnabled("ui")) return;
         this._initContext();
         if (!this.ctx) return;
 
@@ -166,7 +212,7 @@ class SoundSystem {
         gain.gain.exponentialRampToValueAtTime(0.001, now + 0.03);
 
         osc.connect(gain);
-        gain.connect(this.ctx.destination);
+        gain.connect(this.masterGain);
         osc.start(now);
         osc.stop(now + 0.03);
     }
@@ -174,8 +220,8 @@ class SoundSystem {
     /**
      * Victory / Checkmate: Dignified tournament chord progression
      */
-    playVictory() {
-        if (this.muted) return;
+    playVictory(event = "completion") {
+        if (!this.isEventEnabled(event)) return;
         this._initContext();
         if (!this.ctx) return;
 
@@ -200,7 +246,7 @@ class SoundSystem {
             gain.gain.exponentialRampToValueAtTime(0.001, start + 0.65);
 
             osc.connect(gain);
-            gain.connect(this.ctx.destination);
+            gain.connect(this.masterGain);
             osc.start(start);
             osc.stop(start + 0.65);
         });
@@ -210,7 +256,7 @@ class SoundSystem {
      * Clock low warning tick
      */
     playClockTick() {
-        if (this.muted) return;
+        if (!this.isEventEnabled("ui")) return;
         this._initContext();
         if (!this.ctx) return;
 
@@ -226,9 +272,42 @@ class SoundSystem {
         gain.gain.exponentialRampToValueAtTime(0.001, now + 0.02);
 
         osc.connect(gain);
-        gain.connect(this.ctx.destination);
+        gain.connect(this.masterGain);
         osc.start(now);
         osc.stop(now + 0.02);
+    }
+
+    playGameStart() {
+        if (!this.isEventEnabled("start")) return;
+        this._playNotificationTone([440, 659.25], 0.1);
+    }
+
+    playCheckmate() {
+        this.playVictory("checkmate");
+    }
+
+    playNotification() {
+        if (!this.isEventEnabled("notification")) return;
+        this._playNotificationTone([880], 0.055);
+    }
+
+    _playNotificationTone(frequencies, volume) {
+        this._initContext();
+        if (!this.ctx || !this.masterGain) return;
+        const now = this.ctx.currentTime;
+        frequencies.forEach((frequency, index) => {
+            const start = now + index * 0.12;
+            const oscillator = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            oscillator.type = "sine";
+            oscillator.frequency.setValueAtTime(frequency, start);
+            gain.gain.setValueAtTime(volume, start);
+            gain.gain.exponentialRampToValueAtTime(0.001, start + 0.2);
+            oscillator.connect(gain);
+            gain.connect(this.masterGain);
+            oscillator.start(start);
+            oscillator.stop(start + 0.2);
+        });
     }
 }
 

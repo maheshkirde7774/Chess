@@ -512,7 +512,9 @@ class SpectatorController {
     }
 
     avatarLabel(player) {
-        const icons = { king: "♔", queen: "♕", rook: "♖", bishop: "♗", knight: "♘", pawn: "♙" };
+        const icons = window.FOURX_AVATAR_ICONS || {
+            king: "♔", queen: "♕", rook: "♖", bishop: "♗", knight: "♘", pawn: "♙",
+        };
         if (icons[player.avatar]) return icons[player.avatar];
         return (player.name || "?").trim().charAt(0).toUpperCase() || "?";
     }

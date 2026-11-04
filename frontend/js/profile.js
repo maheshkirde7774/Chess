@@ -1,3 +1,16 @@
+window.FOURX_AVATAR_ICONS = {
+    king: "♔",
+    queen: "♕",
+    rook: "♖",
+    bishop: "♗",
+    knight: "♘",
+    pawn: "♙",
+    dragon: "🐉",
+    phoenix: "🔥",
+    cyber_cat: "🐈",
+    royal_lion: "🦁",
+};
+
 class FOURXProfile {
     constructor() {
         this.tokenKey = "fourx-device-profile-token";
@@ -105,7 +118,7 @@ class FOURXProfile {
     renderProfile() {
         const profile = this.profile;
         if (!profile) return;
-        const avatarIcons = { king: "♔", queen: "♕", rook: "♖", bishop: "♗", knight: "♘", pawn: "♙" };
+        const avatarIcons = window.FOURX_AVATAR_ICONS;
         const setText = (id, value) => {
             const element = document.getElementById(id);
             if (element) element.textContent = value;

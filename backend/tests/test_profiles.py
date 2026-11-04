@@ -68,6 +68,60 @@ def test_device_profile_creation_edit_validation_and_private_auth(client):
     assert duplicate.status_code == 409
 
 
+def test_customization_preferences_persist_and_enforce_xp_unlocks(client):
+    token, profile = new_profile(client)
+    auth = {"Authorization": f"Bearer {token}"}
+
+    assert client.get("/api/profile/customization").status_code == 401
+    assert "customization" not in client.get(
+        "/api/profile", headers=auth
+    ).json()
+    defaults = client.get("/api/profile/customization", headers=auth)
+    assert defaults.status_code == 200
+    assert defaults.json()["board_theme"] == "classic_wood"
+    assert defaults.json()["piece_set"] == "staunton"
+    assert defaults.json()["configured"] is False
+
+    locked = {key: value for key, value in defaults.json().items() if key != "configured"}
+    locked["board_theme"] = "neon_cyber"
+    assert client.put("/api/profile/customization", headers=auth, json=locked).status_code == 403
+    assert client.patch(
+        "/api/profile", headers=auth, json={"avatar": "dragon"}
+    ).status_code == 403
+
+    preferences = {
+        key: value for key, value in defaults.json().items() if key != "configured"
+    }
+    preferences["board_theme"] = "marble"
+    preferences["piece_set"] = "modern"
+    preferences["sound"]["volume"] = 0.3
+    preferences["sound"]["events"]["capture"] = False
+    preferences["animations"]["reduced_motion"] = True
+    saved = client.put("/api/profile/customization", headers=auth, json=preferences)
+    assert saved.status_code == 200
+    assert client.get("/api/profile/customization", headers=auth).json() == saved.json()
+    assert saved.json()["configured"] is True
+
+    with SessionLocal() as db:
+        db.query(PlayerProfileModel).filter(
+            PlayerProfileModel.id == profile["id"]
+        ).update({"xp": 800})
+        db.commit()
+    preferences["board_theme"] = "neon_cyber"
+    preferences["piece_set"] = "futuristic"
+    assert client.put("/api/profile/customization", headers=auth, json=preferences).status_code == 200
+    assert client.patch(
+        "/api/profile", headers=auth, json={"avatar": "dragon"}
+    ).status_code == 200
+
+    invalid = {**preferences, "piece_set": "unlisted"}
+    assert client.put("/api/profile/customization", headers=auth, json=invalid).status_code == 422
+    invalid_sound = {**preferences, "sound": {**preferences["sound"], "volume": 2}}
+    assert client.put(
+        "/api/profile/customization", headers=auth, json=invalid_sound
+    ).status_code == 422
+
+
 def test_progression_level_thresholds_increase():
     assert _level_progress(99) == {
         "level": 1, "xp_into_level": 99, "xp_for_next_level": 100, "total_xp": 99,

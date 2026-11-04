@@ -5,6 +5,7 @@
  */
 
 // Classic Staunton-Inspired Vector Pieces with 3D Depth & Player Accent Gemstones
+const PIECE_SYMBOLS = { K: "♔", Q: "♕", R: "♖", B: "♗", N: "♘", P: "♙" };
 const PIECE_SVGS = {
     'K': `
         <svg viewBox="0 0 100 100" class="piece-svg piece-king" xmlns="http://www.w3.org/2000/svg">
@@ -287,6 +288,7 @@ class ChessUI {
                     pEl.className = `chess-piece ${pColor}`;
                     pEl.dataset.player = piece.player;
                     pEl.dataset.type = piece.type;
+                    pEl.dataset.symbol = PIECE_SYMBOLS[piece.type] || "";
                     pEl.innerHTML = PIECE_SVGS[piece.type] || "";
                     pEl.title = `${window.PLAYER_INFO[piece.player]?.name || 'Player'} ${piece.type}${piece.isDormant ? ' (Neutral)' : ''}`;
                     sqEl.appendChild(pEl);
@@ -343,6 +345,13 @@ class ChessUI {
      * Animate smooth piece glide before updating DOM
      */
     animateAndExecuteMove(move, isCapture) {
+        const animations = window.FOURXCustomization?.preferences?.animations;
+        const reducedMotion = animations?.reduced_motion
+            || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+        if (animations && (!animations.movement || reducedMotion)) {
+            this.executeMove(move);
+            return;
+        }
         const [fromR, fromC] = move.from;
         const [toR, toC] = move.to;
 
@@ -628,7 +637,7 @@ class ChessUI {
             title.textContent = `VICTORY!`;
             title.style.color = wInfo.color;
             details.innerHTML = `
-                <div class="winner-trophy">🏆</div>
+                <div class="winner-trophy celebration-effect">🏆</div>
                 <h3 style="color:${wInfo.color}; font-size:1.5rem; margin:10px 0;">${wInfo.name} Army Victorious</h3>
                 <p style="color:var(--color-text-secondary); margin-bottom:16px;">The last standing grandmaster in the quad arena.</p>
                 <div class="gameover-stats">
@@ -641,6 +650,7 @@ class ChessUI {
         } else {
             title.textContent = "DRAW / STALEMATE";
             details.innerHTML = "<p>The tournament match concluded without a sole victor standing.</p>";
+            window.soundSystem.playVictory("completion");
         }
 
         modal.classList.remove("hidden");
