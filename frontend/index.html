@@ -169,6 +169,18 @@
                             <div class="card-action-arrow">→</div>
                         </button>
 
+                        <button id="menu-item-live-games" class="menu-card" type="button">
+                            <div class="card-icon-slot icon-classic"><span aria-hidden="true">◉</span></div>
+                            <div class="card-content">
+                                <div class="card-header-row">
+                                    <span class="card-title">FOURX Live Games</span>
+                                    <span class="card-badge badge-cyan">SPECTATE</span>
+                                </div>
+                                <p class="card-desc">Watch public Classic and Four-Player matches as they happen.</p>
+                            </div>
+                            <div class="card-action-arrow">→</div>
+                        </button>
+
                         <!-- 3. Play with Friends -->
                         <button id="menu-item-friends" class="menu-card" type="button">
                             <div class="card-icon-slot icon-friends">
@@ -294,6 +306,7 @@
                             ROOM <strong id="classic-room-code"></strong>
                             <button id="classic-copy-code" class="mini-btn">Copy</button>
                             <button id="classic-share-room" class="mini-btn">Share</button>
+                            <button id="classic-copy-spectator-key" class="mini-btn hidden">Copy spectator key</button>
                         </div>
                     </div>
                     <div id="classic-status" class="classic-status" aria-live="polite">Choose a mode to begin</div>
@@ -346,6 +359,104 @@
                         <h2 id="classic-result-title">Game over</h2>
                         <p id="classic-result-detail"></p>
                         <button id="classic-result-home" class="classic-action-btn">Back to home</button>
+                    </div>
+                </div>
+            </section>
+
+            <section id="view-live-games" class="app-view">
+                <div class="dashboard-scrollable live-games-page">
+                    <div class="screen-hero">
+                        <h2>FOURX Live Games</h2>
+                        <p>Browse public matches in progress and follow the action in real time.</p>
+                    </div>
+                    <div class="live-games-toolbar">
+                        <label>Game mode
+                            <select id="live-game-mode-filter">
+                                <option value="all">All modes</option>
+                                <option value="classic">Classic 1v1</option>
+                                <option value="four_player">Four-Player Chess</option>
+                            </select>
+                        </label>
+                        <label>Sort matches
+                            <select id="live-game-sort">
+                                <option value="popular">Most popular</option>
+                                <option value="recent">Recently started</option>
+                            </select>
+                        </label>
+                        <button id="live-game-refresh" class="neon-btn secondary-btn" type="button">Refresh</button>
+                    </div>
+                    <div id="live-games-list" class="live-games-list" aria-live="polite"></div>
+                    <form id="private-spectator-form" class="private-spectator-form">
+                        <h3>Watch a private match</h3>
+                        <p>Private games are not listed. Enter the room code and the spectator key shared by a player.</p>
+                        <label>Game mode
+                            <select id="private-spectator-mode">
+                                <option value="classic">Classic 1v1</option>
+                                <option value="four_player">Four-Player Chess</option>
+                            </select>
+                        </label>
+                        <label>Room code
+                            <input id="private-spectator-code" type="text" maxlength="10" autocomplete="off" required>
+                        </label>
+                        <label>Spectator key
+                            <input id="private-spectator-key" type="password" maxlength="64" autocomplete="off" required>
+                        </label>
+                        <button class="neon-btn secondary-btn" type="submit">Watch Private Match</button>
+                    </form>
+                    <section class="live-replays-section">
+                        <h3>Completed public matches</h3>
+                        <p>Replay verified move histories from completed online games.</p>
+                        <div id="live-replays-list" class="live-games-list" aria-live="polite"></div>
+                    </section>
+                </div>
+            </section>
+
+            <section id="view-spectator" class="app-view">
+                <div class="spectator-page">
+                    <header class="spectator-toolbar">
+                        <div>
+                            <span id="spectator-live-indicator" class="spectator-live-indicator"><i></i> LIVE</span>
+                            <h2 id="spectator-match-title">FOURX Match</h2>
+                            <p id="spectator-match-subtitle">Connecting to match…</p>
+                        </div>
+                        <div class="spectator-actions">
+                            <span id="spectator-count" class="spectator-count">0 watching</span>
+                            <span id="spectator-duration" class="spectator-duration">00:00</span>
+                            <button id="spectator-leave" class="neon-btn secondary-btn" type="button">Leave Spectator Mode</button>
+                        </div>
+                    </header>
+                    <div id="spectator-players" class="spectator-players" aria-label="Match players"></div>
+                    <div class="spectator-layout">
+                        <div class="spectator-board-column">
+                            <div class="spectator-board-actions">
+                                <button id="spectator-orientation" class="neon-btn secondary-btn" type="button">Rotate board</button>
+                                <button id="spectator-fullscreen" class="neon-btn secondary-btn" type="button">Fullscreen board</button>
+                            </div>
+                            <div id="spectator-board-wrap" class="spectator-board-wrap">
+                                <div id="spectator-board" class="spectator-board-grid" role="grid" aria-label="Read-only live chessboard"></div>
+                            </div>
+                            <div id="spectator-match-status" class="spectator-match-status" aria-live="polite">Waiting for match state…</div>
+                            <div id="spectator-result" class="spectator-result hidden"></div>
+                        </div>
+                        <aside class="spectator-history-panel">
+                            <h3>Move history</h3>
+                            <ol id="spectator-move-history" class="spectator-move-history"></ol>
+                            <div id="spectator-replay-controls" class="spectator-replay-controls hidden">
+                                <div id="spectator-replay-position">Move 0 of 0</div>
+                                <div class="spectator-replay-buttons">
+                                    <button id="spectator-replay-previous" class="neon-btn secondary-btn" type="button" aria-label="Previous move">◀</button>
+                                    <button id="spectator-replay-play" class="neon-btn secondary-btn" type="button">Play</button>
+                                    <button id="spectator-replay-next" class="neon-btn secondary-btn" type="button" aria-label="Next move">▶</button>
+                                </div>
+                                <label>Replay speed
+                                    <select id="spectator-replay-speed">
+                                        <option value="2000">0.5×</option>
+                                        <option value="1000" selected>1×</option>
+                                        <option value="500">2×</option>
+                                    </select>
+                                </label>
+                            </div>
+                        </aside>
                     </div>
                 </div>
             </section>
@@ -1145,6 +1256,12 @@
                         <button class="neon-btn secondary-btn lobby-touch-btn" id="btn-lobby-share">Share invite</button>
                     </div>
                 </div>
+                <div id="lobby-spectator-invite" class="lobby-spectator-invite hidden">
+                    <strong>Private spectator key</strong>
+                    <input id="lobby-spectator-key" type="password" readonly aria-label="Private spectator key">
+                    <button class="neon-btn secondary-btn" id="btn-copy-spectator-key" type="button">Copy spectator key</button>
+                    <small>Share this key only with people allowed to watch. It does not grant player controls.</small>
+                </div>
                 <div class="lobby-player-grid" id="lobby-player-slots"></div>
                 <div class="lobby-actions lobby-main-actions">
                     <button class="neon-btn primary-btn lobby-touch-btn" id="btn-lobby-ready">Ready</button>
@@ -1329,6 +1446,7 @@
     <script src="js/social.js"></script>
     <script src="js/daily-puzzles.js"></script>
     <script src="js/classic-chess.js"></script>
+    <script src="js/spectator.js"></script>
     <script src="js/app.js"></script>
 </body>
 </html>

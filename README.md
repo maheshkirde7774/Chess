@@ -30,6 +30,7 @@
 | **🤖 Tactical AI Bots** | Full single-player vs AI mode with 3 intelligent bots and selectable tactical tiers: Novice (800), Club (1400), and Master (2000). |
 | **🤝 2v2 Team Alliance** | Team combat format: South (Cyan) & North (Lime) alliance battle West (Magenta) & East (Gold) with joint checkmate objectives. |
 | **🌐 Online Multiplayer** | Private or public Classic 1v1 and four-player rooms, secure six-character invitation codes, ready/presence lobbies, host-controlled start, server-validated actions, and WebSocket reconnection. |
+| **👁️ Live Spectator Mode** | Browse public ongoing matches, watch Classic and Four-Player games read-only, track real spectators and clocks, and replay completed public online match histories. Private games use a separate spectator key. |
 | **🤝 FOURX Social** | Search and connect with players, manage friend requests and blocks, see server-derived presence, exchange private messages, and accept Classic or Four-Player match invitations. |
 | **📱 Local Pass & Play** | Couch multiplayer on a single device with turn-privacy screens, auto-board rotation, and move undo. |
 | **🧩 Daily Classic Puzzles** | A real Lichess daily puzzle, server-validated legal solution, progressive hints, difficulty-based XP, timezone-aware streaks, and an archive. Four-Player puzzles are marked as future work until they can be authoritatively validated. |
@@ -211,6 +212,12 @@ Four-player rooms use `/rooms` and `/ws/{room_code}` and keep the original four-
 
 Both online modes provide a waiting lobby with room code copy/share, occupied and empty seats, presence/readiness, host start, and waiting-room leave. Share uses the native Web Share API when available and falls back to copying the room code. Player credentials are bearer secrets returned only to the matching player; they are excluded from room snapshots and broadcasts.
 
+### Live Spectator Mode
+
+Open **FOURX Live Games** from the home screen to find public matches currently in progress. Match lists include real player names, profile avatars when available, spectator counts, mode, status, and elapsed time. Spectators receive an initial sanitized position and live move, presence, timer, and spectator-count updates; spectator sockets reject all game-control messages. Completed public online games with valid stored move histories are available for step-by-step or timed replay.
+
+Private matches never appear in the live or replay listings. Room create/join responses provide a separate private spectator key; players can copy or share this key, and viewers enter it with the room code on the Live Games screen. The key authorizes only the read-only spectator socket and is not included in room-state responses or game broadcasts.
+
 ## Player Profiles & Progression
 
 The Profile screen creates a device-scoped profile automatically. Its opaque bearer credential is stored in this browser's local storage and is returned only during profile creation; it is not a password account and cannot be recovered or transferred to another device. Users can choose a preset avatar and edit a unique 3–20 character username. Match attribution uses the profile credential at room creation/join, while game actions continue to require the existing room player credential.
@@ -276,6 +283,9 @@ cd android
 | `POST` | `/rooms` | Create a room (assigns Player 1: Cyan) |
 | `POST` | `/rooms/join` | Join room by code (assigns next open seat 2..4) |
 | `GET` | `/rooms` | List public waiting rooms |
+| `GET` | `/spectator/live-games` | List active public Classic and Four-Player matches with live spectator counts |
+| `GET` | `/spectator/replays` | List recent completed public online matches with persisted histories |
+| `GET` | `/spectator/replays/{match_id}` | Retrieve validated positions and move history for a public replay |
 | `GET` | `/rooms/{code}` | Retrieve full serialized board state & active players |
 | `POST` | `/rooms/{code}/start` | Start a full room as its host |
 | `POST` | `/rooms/{code}/leave` | Leave a waiting room |
@@ -321,6 +331,10 @@ cd android
 | `POST` | `/classic/rooms/{code}/restart` | Restart an authorized local or AI Classic match |
 | `POST` | `/classic/rooms/{code}/resign` | Resign an authorized active AI match |
 | `GET` | `/classic/rooms/{code}` | Retrieve authorized classic state with `Authorization: Bearer <player_id>` |
+
+### Spectator WebSocket Protocol
+
+Spectator WebSockets are `/ws/spectate/{room_code}` for Four-Player and `/ws/spectate/classic/{room_code}` for Classic. Send `{"type":"SPECTATE"}` after connecting to a public match, or include `access_token` with the separate spectator key for a private match. The server sends `SYNC_STATE`, followed by live room events and timer/count synchronization. Any spectator message other than `PING` receives a read-only error. Connections are capped at 100 per room, 500 server-wide, and 20 per IP address; spectators are disconnected when a match completes.
 
 ### WebSocket Frame Specification (`/ws/{room_code}`)
 

@@ -3,6 +3,7 @@ class ClassicChessUI {
         this.app = app;
         this.roomCode = null;
         this.playerId = null;
+        this.spectatorToken = null;
         this.mySide = null;
         this.mode = null;
         this.roomStatus = "WAITING";
@@ -33,14 +34,26 @@ class ClassicChessUI {
     async shareRoom() {
         const invite = {
             title: "FOURX Classic Chess invitation",
-            text: `Join my FOURX Classic Chess room. Room code: ${this.roomCode}`,
+            text: `Join my FOURX Classic Chess room. Room code: ${this.roomCode}${this.spectatorToken ? ` · Private spectator key: ${this.spectatorToken}` : ""}`,
             url: window.location.href,
         };
         try {
             if (navigator.share) await navigator.share(invite);
             else await this.copyRoomCode();
         } catch (error) {
-            if (error.name !== "AbortError") this.app.showToast(`Share room code: ${this.roomCode}`);
+            if (error.name !== "AbortError") {
+                this.app.showToast(`Room code: ${this.roomCode}${this.spectatorToken ? ` · Spectator key: ${this.spectatorToken}` : ""}`);
+            }
+        }
+    }
+
+    async copySpectatorKey() {
+        if (!this.spectatorToken) return;
+        try {
+            await navigator.clipboard.writeText(this.spectatorToken);
+            this.app.showToast("Private spectator key copied.");
+        } catch (error) {
+            this.app.showToast(`Private spectator key: ${this.spectatorToken}`);
         }
     }
 
@@ -60,6 +73,7 @@ class ClassicChessUI {
             sessionStorage.removeItem("classicChessSession");
             this.roomCode = null;
             this.playerId = null;
+            this.spectatorToken = null;
             this.state = null;
             this.app.switchView("view-home");
         } catch (error) {
@@ -97,6 +111,7 @@ class ClassicChessUI {
         document.getElementById("classic-leave-room")?.addEventListener("click", () => this.leaveRoom());
         document.getElementById("classic-copy-code")?.addEventListener("click", () => this.copyRoomCode());
         document.getElementById("classic-share-room")?.addEventListener("click", () => this.shareRoom());
+        document.getElementById("classic-copy-spectator-key")?.addEventListener("click", () => this.copySpectatorKey());
         document.getElementById("classic-create-online")?.addEventListener("click", () => {
             this.startRoom("online");
         });
@@ -274,6 +289,7 @@ class ClassicChessUI {
     enterRoom(data, mode) {
         this.roomCode = data.room_code;
         this.playerId = data.player_id;
+        this.spectatorToken = data.spectator_token || null;
         this.mySide = data.your_side;
         this.mode = mode;
         this.players = data.players || {};
@@ -283,12 +299,16 @@ class ClassicChessUI {
         sessionStorage.setItem("classicChessSession", JSON.stringify({
             roomCode: this.roomCode,
             playerId: this.playerId,
+            spectatorToken: this.spectatorToken,
             mode: this.mode,
             mySide: this.mySide,
         }));
         this.app.hideAllModals();
         document.getElementById("classic-room-tag")?.classList.toggle("hidden", mode !== "online");
         document.getElementById("classic-room-code").textContent = this.roomCode;
+        document.getElementById("classic-copy-spectator-key")?.classList.toggle(
+            "hidden", !this.spectatorToken
+        );
         document.getElementById("classic-leave-room")?.classList.toggle("hidden", mode !== "online");
         document.getElementById("classic-result")?.classList.add("hidden");
         this.app.switchView("view-classic");
@@ -310,7 +330,11 @@ class ClassicChessUI {
                 `/classic/rooms/${encodeURIComponent(saved.roomCode)}`,
                 { headers: { Authorization: `Bearer ${saved.playerId}` } }
             );
-            this.enterRoom({ ...data, player_id: saved.playerId }, data.mode || saved.mode || "online");
+            this.enterRoom({
+                ...data,
+                player_id: saved.playerId,
+                spectator_token: saved.spectatorToken || null,
+            }, data.mode || saved.mode || "online");
         } catch (error) {
             sessionStorage.removeItem("classicChessSession");
         }

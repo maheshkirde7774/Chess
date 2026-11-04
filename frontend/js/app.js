@@ -18,6 +18,7 @@ class QuadChessApp {
         this.myRole = null; // 1: Cyan, 2: Magenta, 3: Lime, 4: Gold
         this.onlinePlayers = {};
         this.roomSettings = {};
+        this.spectatorToken = null;
         this.lobbyReady = false;
 
         this.wsClient = new window.WebSocketClient(
@@ -31,6 +32,7 @@ class QuadChessApp {
 
         this.currentView = "view-home";
         this.social = new window.FOURXSocialController(this);
+        this.spectator = new window.SpectatorController(this);
         this.initEventListeners();
         this.initSettingsValues();
         this.initDashboardData();
@@ -42,6 +44,12 @@ class QuadChessApp {
     /* ==================== VIEW NAVIGATION ==================== */
 
     switchView(viewId) {
+        if (this.currentView === "view-live-games" && viewId !== "view-live-games") {
+            this.spectator?.onLobbyExited();
+        }
+        if (this.currentView === "view-spectator" && viewId !== "view-spectator") {
+            this.spectator?.onSpectatorExited();
+        }
         document.querySelectorAll(".app-view").forEach(v => v.classList.remove("active-view"));
         const targetView = document.getElementById(viewId);
         if (targetView) {
@@ -49,6 +57,7 @@ class QuadChessApp {
             this.currentView = viewId;
         }
         if (viewId === "view-puzzles") this.dailyPuzzles?.onViewEntered();
+        if (viewId === "view-live-games") this.spectator?.onLobbyEntered();
 
         // Update Bottom Nav active state
         document.querySelectorAll(".nav-tab-btn").forEach(btn => {
@@ -118,6 +127,9 @@ class QuadChessApp {
         });
         document.getElementById("menu-item-classic-1v1")?.addEventListener("click", () => {
             this.showModal("classic-menu-modal");
+        });
+        document.getElementById("menu-item-live-games")?.addEventListener("click", () => {
+            this.switchView("view-live-games");
         });
         document.getElementById("menu-item-friends")?.addEventListener("click", () => {
             this.switchView("view-friends");
@@ -278,6 +290,7 @@ class QuadChessApp {
         });
         document.getElementById("btn-lobby-copy")?.addEventListener("click", () => this.copyRoomCode());
         document.getElementById("btn-lobby-share")?.addEventListener("click", () => this.shareRoomInvite());
+        document.getElementById("btn-copy-spectator-key")?.addEventListener("click", () => this.copySpectatorKey());
         document.getElementById("btn-lobby-ready")?.addEventListener("click", () => {
             this.lobbyReady = !this.lobbyReady;
             this.wsClient.send({ type: "READY", ready: this.lobbyReady });
@@ -512,6 +525,7 @@ class QuadChessApp {
             const data = await res.json();
             this.roomCode = data.room_code;
             this.playerId = data.player_id;
+            this.spectatorToken = data.spectator_token || null;
             this.myRole = data.player_role;
             this.isOnlineMode = true;
             this.gameMode = "online";
@@ -589,6 +603,7 @@ class QuadChessApp {
             const data = await res.json();
             this.roomCode = data.room_code;
             this.playerId = data.player_id;
+            this.spectatorToken = data.spectator_token || null;
             this.myRole = data.player_role;
             this.isOnlineMode = true;
             this.gameMode = "online";
@@ -625,7 +640,11 @@ class QuadChessApp {
                     if (!response.ok) throw new Error(roomState.detail || "Could not load invited match.");
                 }
                 this.classicChess.enterRoom(
-                    { ...roomState, player_id: launch.player_id },
+                    {
+                        ...roomState,
+                        player_id: launch.player_id,
+                        spectator_token: launch.spectator_token || null,
+                    },
                     "online"
                 );
                 return;
@@ -674,6 +693,7 @@ class QuadChessApp {
             roomCode: this.roomCode,
             playerId: this.playerId,
             playerRole: this.myRole,
+            spectatorToken: this.spectatorToken,
         }));
     }
 
@@ -694,6 +714,7 @@ class QuadChessApp {
             const room = await response.json();
             this.roomCode = room.room_code;
             this.playerId = saved.playerId;
+            this.spectatorToken = saved.spectatorToken || null;
             this.myRole = saved.playerRole || this.myRole;
             this.roomSettings = room.settings || {};
             this.isOnlineMode = true;
@@ -714,6 +735,10 @@ class QuadChessApp {
         const slots = document.getElementById("lobby-player-slots");
         if (!code || !slots || !this.roomCode) return;
         code.textContent = this.roomCode;
+        const spectatorInvite = document.getElementById("lobby-spectator-invite");
+        const spectatorKey = document.getElementById("lobby-spectator-key");
+        spectatorInvite?.classList.toggle("hidden", !this.spectatorToken);
+        if (spectatorKey) spectatorKey.value = this.spectatorToken || "";
         const players = state?.players || this.onlinePlayers || {};
         const hostRole = state?.host_role || Object.keys(players).find(
             (role) => players[role]?.host
@@ -769,14 +794,26 @@ class QuadChessApp {
         if (!this.roomCode) return;
         const invitation = {
             title: "FOURX room invitation",
-            text: `Join my FOURX chess room. Room code: ${this.roomCode}`,
+            text: `Join my FOURX chess room. Room code: ${this.roomCode}${this.spectatorToken ? ` · Private spectator key: ${this.spectatorToken}` : ""}`,
             url: window.location.href,
         };
         try {
             if (navigator.share) await navigator.share(invitation);
             else await this.copyRoomCode();
         } catch (error) {
-            if (error.name !== "AbortError") this.showToast(`Share room code: ${this.roomCode}`);
+            if (error.name !== "AbortError") {
+                this.showToast(`Room code: ${this.roomCode}${this.spectatorToken ? ` · Spectator key: ${this.spectatorToken}` : ""}`);
+            }
+        }
+    }
+
+    async copySpectatorKey() {
+        if (!this.spectatorToken) return;
+        try {
+            await navigator.clipboard.writeText(this.spectatorToken);
+            this.showToast("Private spectator key copied.");
+        } catch (error) {
+            this.showToast(`Private spectator key: ${this.spectatorToken}`);
         }
     }
 

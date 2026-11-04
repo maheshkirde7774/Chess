@@ -61,6 +61,7 @@ class ClassicRoomModel(Base):
     players_json = Column(Text, default="{}")
     state_json = Column(Text, default="{}")
     is_private = Column(Boolean, default=True, nullable=False)
+    spectator_token = Column(String(64), nullable=True)
     ai_config_json = Column(Text, default="{}")
     match_id = Column(String(36), nullable=True, index=True)
     started_at = Column(DateTime, nullable=True)
@@ -329,6 +330,9 @@ def init_db():
     if "is_private" not in {column["name"] for column in inspect(engine).get_columns("classic_rooms")}:
         with engine.begin() as connection:
             connection.execute(text("ALTER TABLE classic_rooms ADD COLUMN is_private BOOLEAN NOT NULL DEFAULT TRUE"))
+    if "spectator_token" not in {column["name"] for column in inspect(engine).get_columns("classic_rooms")}:
+        with engine.begin() as connection:
+            connection.execute(text("ALTER TABLE classic_rooms ADD COLUMN spectator_token VARCHAR(64)"))
     if "ai_config_json" not in {column["name"] for column in inspect(engine).get_columns("classic_rooms")}:
         with engine.begin() as connection:
             connection.execute(text("ALTER TABLE classic_rooms ADD COLUMN ai_config_json TEXT NOT NULL DEFAULT '{}'"))

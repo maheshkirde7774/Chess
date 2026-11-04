@@ -218,6 +218,7 @@ def _sanitize_players(players: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
             "connected": player.get("connected", False),
             "ready": player.get("ready", False),
             "host": player.get("host", False),
+            "avatar": player.get("avatar"),
         }
         for side, player in players.items()
     }
@@ -250,6 +251,7 @@ def _runtime(db: Session, code: str) -> Optional[Dict[str, Any]]:
         "players": players,
         "game": game,
         "is_private": record.is_private,
+        "spectator_token": record.spectator_token,
         "ai": ai_config,
         "ai_thinking": False,
         "generation": 0,
@@ -434,6 +436,7 @@ def create_classic_room(
 
     code = _generate_code(db)
     white_id = str(uuid.uuid4())
+    spectator_token = secrets.token_urlsafe(32) if request.is_private else None
     if request.ai_difficulty not in DIFFICULTIES:
         raise HTTPException(status_code=422, detail="Unsupported AI difficulty")
     if request.human_side not in {"white", "black"}:
@@ -452,7 +455,8 @@ def create_classic_room(
     players = {
         "white": {"player_id": white_id, "name": player_name,
                   "connected": False, "ready": True, "host": True,
-                  "profile_id": profile.id if profile else None}
+                  "profile_id": profile.id if profile else None,
+                  "avatar": profile.avatar if profile else None}
     }
     if started:
         players["black"] = {"player_id": white_id, "name": "Black", "connected": False, "ready": True}
@@ -464,7 +468,8 @@ def create_classic_room(
         players = {
             human_side: {"player_id": human_id, "name": player_name,
                          "connected": False, "ready": True, "host": True,
-                         "profile_id": profile.id if profile else None},
+                         "profile_id": profile.id if profile else None,
+                         "avatar": profile.avatar if profile else None},
             ai_side: {"player_id": f"ai:{code}", "name": ai_name,
                       "connected": True, "ready": True, "host": False,
                       "profile_id": None},
@@ -477,6 +482,7 @@ def create_classic_room(
         white_id = human_id
     room = {"mode": mode, "time_control": control, "status": "PLAYING" if game_active else "WAITING",
             "players": players, "game": game, "is_private": request.is_private,
+            "spectator_token": spectator_token,
             "match_id": str(uuid.uuid4()),
             "started_at": datetime.now(timezone.utc) if started else None,
             "ai": ai_config, "ai_thinking": False, "generation": 0,
@@ -486,6 +492,7 @@ def create_classic_room(
         room_code=code, mode=mode, time_control=control, status=room["status"],
         players_json=json.dumps(players), state_json=json.dumps(game.serialize()),
         is_private=request.is_private, ai_config_json=json.dumps(ai_config),
+        spectator_token=spectator_token,
         match_id=room["match_id"], started_at=room["started_at"],
     )
     db.add(record)
@@ -494,6 +501,7 @@ def create_classic_room(
         **_public_state(code, room),
         "player_id": white_id,
         "your_side": request.human_side if mode == "ai" else "white",
+        "spectator_token": spectator_token,
     }
 
 
@@ -521,13 +529,19 @@ async def join_classic_room(
         "player_id": black_id, "name": profile.username if profile else request.player_name.strip() or "Black",
         "connected": False, "ready": False, "host": False,
         "profile_id": profile.id if profile else None,
+        "avatar": profile.avatar if profile else None,
     }
     _persist(db, code, room)
     await manager.broadcast_to_room(f"classic:{code}", {
         "type": "PLAYER_JOINED", "players": _sanitize_players(room["players"]),
         **_public_state(code, room),
     })
-    return {**_public_state(code, room), "player_id": black_id, "your_side": "black"}
+    return {
+        **_public_state(code, room),
+        "player_id": black_id,
+        "your_side": "black",
+        "spectator_token": room.get("spectator_token"),
+    }
 
 
 @router.post("/classic/rooms/{room_code}/start")
@@ -656,6 +670,133 @@ def get_classic_room(
         raise HTTPException(status_code=403, detail="Unauthorized player")
     _persist(db, code, room)
     return {**_public_state(code, room), "your_side": side}
+
+
+@router.websocket("/ws/spectate/classic/{room_code}")
+async def classic_spectator_websocket(
+    websocket: WebSocket,
+    room_code: str,
+    db: Session = Depends(get_db),
+):
+    code = room_code.strip().upper()
+    room = _runtime(db, code)
+    if room is None or room["mode"] != "online" or room["status"] != "PLAYING":
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+
+    await websocket.accept()
+    try:
+        auth_message = await asyncio.wait_for(websocket.receive_text(), timeout=5)
+        if len(auth_message) > 4096:
+            raise ValueError("Authentication message is too large")
+        auth = json.loads(auth_message)
+    except (asyncio.TimeoutError, json.JSONDecodeError, ValueError, WebSocketDisconnect):
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+    if not isinstance(auth, dict) or auth.get("type") not in {"AUTH", "SPECTATE"}:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+    if room.get("is_private", True):
+        token = auth.get("access_token")
+        spectator_token = room.get("spectator_token")
+        authorized = (
+            isinstance(token, str)
+            and isinstance(spectator_token, str)
+            and secrets.compare_digest(token, spectator_token)
+        )
+        if not authorized:
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+            return
+
+    manager_room = f"classic:{code}"
+    spectator_id = str(uuid.uuid4())
+    client_ip = websocket.client.host if websocket.client else "unknown"
+    try:
+        await manager.connect_spectator(
+            manager_room, spectator_id, websocket, client_ip, accepted=True
+        )
+    except ValueError:
+        await websocket.close(code=status.WS_1013_TRY_AGAIN_LATER)
+        return
+
+    state = room["game"].snapshot()
+    state.pop("legal_moves", None)
+    await websocket.send_text(json.dumps({
+        "type": "SYNC_STATE",
+        "room_code": code,
+        "game_mode": "classic",
+        "server_time": time.time(),
+        "mode": room["mode"],
+        "time_control": room["time_control"],
+        "status": room["status"],
+        "settings": {
+            "game_mode": "classic",
+            "is_private": room.get("is_private", True),
+            "time_control": room["time_control"],
+            "max_players": 2,
+        },
+        "players": _sanitize_players(room["players"]),
+        "game_state": state,
+        "spectator_count": manager.spectator_count(manager_room),
+        "started_at": room["started_at"].isoformat() if room.get("started_at") else None,
+    }))
+    await manager.broadcast_to_room(manager_room, {
+        "type": "SPECTATOR_COUNT",
+        "spectator_count": manager.spectator_count(manager_room),
+    })
+    try:
+        while True:
+            try:
+                raw_message = await asyncio.wait_for(websocket.receive_text(), timeout=15)
+            except asyncio.TimeoutError:
+                raw_message = ""
+            if raw_message:
+                if len(raw_message) > 4096:
+                    await websocket.send_text(json.dumps({
+                        "type": "ERROR", "message": "Message is too large",
+                    }))
+                    continue
+                try:
+                    payload = json.loads(raw_message)
+                except json.JSONDecodeError:
+                    await websocket.send_text(json.dumps({
+                        "type": "ERROR", "message": "Invalid message format",
+                    }))
+                    continue
+                if isinstance(payload, dict) and payload.get("type") == "PING":
+                    response_type = "PONG"
+                else:
+                    await websocket.send_text(json.dumps({
+                        "type": "ERROR",
+                        "message": "Spectator connections are read-only",
+                    }))
+                    continue
+            else:
+                response_type = "TIMER_SYNC"
+            started_at = room.get("started_at")
+            if started_at and started_at.tzinfo is None:
+                started_at = started_at.replace(tzinfo=timezone.utc)
+            duration = max(
+                0,
+                int((datetime.now(timezone.utc) - started_at).total_seconds()),
+            ) if started_at else 0
+            await websocket.send_text(json.dumps({
+                "type": response_type,
+                "server_time": time.time(),
+                "duration_seconds": duration,
+                "clocks": room["game"]._clock_values(),
+                "turn": "white" if room["game"].board.turn else "black",
+            }))
+    except WebSocketDisconnect:
+        pass
+    except RuntimeError as error:
+        logger.info("Classic spectator socket for room %s disconnected during send: %s", code, error)
+    finally:
+        manager.disconnect_spectator(manager_room, spectator_id, websocket)
+        await manager.broadcast_to_room(manager_room, {
+            "type": "SPECTATOR_COUNT",
+            "spectator_count": manager.spectator_count(manager_room),
+        })
 
 
 @router.websocket("/ws/classic/{room_code}")

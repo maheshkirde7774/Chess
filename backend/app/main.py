@@ -23,11 +23,14 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
-from app.db import init_db, get_db, RoomModel, GameHistoryModel, ClassicRoomModel
+from app.db import (
+    init_db, get_db, RoomModel, GameHistoryModel, ClassicRoomModel,
+    MatchRecordModel,
+)
 from app.engine import (
     FourPlayerChessEngine, Move,
     PLAYER_CYAN, PLAYER_MAGENTA, PLAYER_LIME, PLAYER_GOLD,
-    PLAYER_NAMES, PLAYER_COLORS
+    PLAYER_NAMES, PLAYER_COLORS, is_valid_square,
 )
 from app.models import (
     CreateRoomRequest, CreateRoomResponse,
@@ -35,7 +38,7 @@ from app.models import (
     MoveRequest, ResignRequest, RoomStateResponse
 )
 from app.ws_manager import manager
-from app.classic import router as classic_router
+from app.classic import router as classic_router, classic_rooms
 from app.room_limits import enforce_room_rate_limit as _rate_limit
 from app.profiles import profile_from_authorization, record_completed_match, router as profile_router
 from app.social import presence_hub, router as social_router
@@ -68,12 +71,13 @@ def _new_player_id() -> str:
     return secrets.token_urlsafe(32)
 
 def _settings(room_data: Dict[str, Any]) -> Dict[str, Any]:
-    return room_data.get("settings", {
+    settings = room_data.get("settings", {
         "game_mode": "four_player",
         "is_private": True,
         "time_control": "unlimited",
         "max_players": 4,
     })
+    return {key: value for key, value in settings.items() if key != "spectator_token"}
 
 def get_or_create_room_runtime(db: Session, room_code: str) -> Optional[Dict[str, Any]]:
     """Loads room from memory or SQLite database."""
@@ -105,6 +109,7 @@ def get_or_create_room_runtime(db: Session, room_code: str) -> Optional[Dict[str
         settings = json.loads(room_record.settings_json or "{}")
     except (TypeError, json.JSONDecodeError):
         settings = {}
+    spectator_token = settings.pop("spectator_token", None)
 
     room_runtime = {
         "engine": engine,
@@ -119,6 +124,7 @@ def get_or_create_room_runtime(db: Session, room_code: str) -> Optional[Dict[str
             "max_players": 4,
             **settings,
         },
+        "spectator_token": spectator_token,
     }
     active_rooms[room_code] = room_runtime
     return room_runtime
@@ -137,7 +143,10 @@ def persist_room_state(db: Session, room_code: str):
     room_record.status = room_data["status"]
     room_record.players_json = json.dumps(room_data["players"])
     room_record.state_json = json.dumps(room_data["engine"].get_state())
-    room_record.settings_json = json.dumps(_settings(room_data))
+    persisted_settings = dict(room_data.get("settings", {}))
+    if room_data.get("spectator_token"):
+        persisted_settings["spectator_token"] = room_data["spectator_token"]
+    room_record.settings_json = json.dumps(persisted_settings)
     room_record.winner = room_data["engine"].winner
     room_record.match_id = room_data.get("match_id")
     room_record.started_at = room_data.get("started_at")
@@ -195,6 +204,7 @@ def create_room(req: CreateRoomRequest, request: Request, db: Session = Depends(
         room_code = generate_room_code()
 
     player_id = _new_player_id()
+    spectator_token = secrets.token_urlsafe(32) if req.is_private else None
     player_role = PLAYER_CYAN
     profile = profile_from_authorization(request.headers.get("authorization"), db)
     player_name = profile.username if profile else (req.player_name.strip() or "Player 1")
@@ -208,6 +218,7 @@ def create_room(req: CreateRoomRequest, request: Request, db: Session = Depends(
             "ready": True,
             "host": True,
             "profile_id": profile.id if profile else None,
+            "avatar": profile.avatar if profile else None,
         }
     }
 
@@ -217,6 +228,7 @@ def create_room(req: CreateRoomRequest, request: Request, db: Session = Depends(
         "status": "WAITING",
         "match_id": str(uuid.uuid4()),
         "started_at": None,
+        "spectator_token": spectator_token,
         "settings": {
             "game_mode": "four_player",
             "is_private": req.is_private,
@@ -231,7 +243,10 @@ def create_room(req: CreateRoomRequest, request: Request, db: Session = Depends(
         status="WAITING",
         players_json=json.dumps(players),
         state_json=json.dumps(engine.get_state()),
-        settings_json=json.dumps(active_rooms[room_code]["settings"]),
+        settings_json=json.dumps({
+            **active_rooms[room_code]["settings"],
+            **({"spectator_token": spectator_token} if spectator_token else {}),
+        }),
         match_id=active_rooms[room_code]["match_id"],
     )
     db.add(room_record)
@@ -243,7 +258,8 @@ def create_room(req: CreateRoomRequest, request: Request, db: Session = Depends(
         player_id=player_id,
         player_role=player_role,
         player_name=player_name,
-        message="Room created successfully"
+        message="Room created successfully",
+        spectator_token=spectator_token,
     )
 
 @app.post("/rooms/join", response_model=JoinRoomResponse)
@@ -285,6 +301,7 @@ async def join_room(req: JoinRoomRequest, request: Request, db: Session = Depend
         "ready": False,
         "host": False,
         "profile_id": profile.id if profile else None,
+        "avatar": profile.avatar if profile else None,
     }
 
     persist_room_state(db, room_code)
@@ -305,7 +322,8 @@ async def join_room(req: JoinRoomRequest, request: Request, db: Session = Depend
         player_id=player_id,
         player_role=assigned_role,
         player_name=player_name,
-        message=f"Joined room as {PLAYER_NAMES[assigned_role]}"
+        message=f"Joined room as {PLAYER_NAMES[assigned_role]}",
+        spectator_token=room_data.get("spectator_token"),
     )
 
 @app.get("/rooms/{room_code}", response_model=RoomStateResponse)
@@ -382,6 +400,207 @@ def list_public_rooms(db: Session = Depends(get_db)):
             "host_role": "white",
         })
     return rooms
+
+@app.get("/spectator/live-games")
+def list_live_spectator_games(db: Session = Depends(get_db)):
+    """Returns active public matches with real player and spectator counts."""
+    now = datetime.now(timezone.utc)
+    games = []
+    four_player_records = db.query(RoomModel).filter(RoomModel.status == "PLAYING").all()
+    for record in four_player_records:
+        room = get_or_create_room_runtime(db, record.room_code)
+        if not room or room["status"] != "PLAYING" or _settings(room)["is_private"]:
+            continue
+        started_at = room.get("started_at")
+        if started_at and started_at.tzinfo is None:
+            started_at = started_at.replace(tzinfo=timezone.utc)
+        games.append({
+            "room_code": record.room_code,
+            "game_mode": "four_player",
+            "status": room["status"],
+            "players": _sanitize_players(room["players"]),
+            "current_turn": room["engine"].current_turn,
+            "spectator_count": manager.spectator_count(record.room_code),
+            "started_at": started_at.isoformat() if started_at else None,
+            "duration_seconds": max(0, int((now - started_at).total_seconds())) if started_at else 0,
+        })
+
+    classic_records = db.query(ClassicRoomModel).filter(
+        ClassicRoomModel.status == "PLAYING",
+        ClassicRoomModel.mode == "online",
+        ClassicRoomModel.is_private.is_(False),
+    ).all()
+    for record in classic_records:
+        try:
+            raw_players = json.loads(record.players_json or "{}")
+            saved_state = json.loads(record.state_json or "{}")
+        except (TypeError, json.JSONDecodeError):
+            logger.exception("Could not decode public classic room %s", record.room_code)
+            continue
+        room = classic_rooms.get(record.room_code)
+        started_at = room.get("started_at") if room else record.started_at
+        if started_at and started_at.tzinfo is None:
+            started_at = started_at.replace(tzinfo=timezone.utc)
+        games.append({
+            "room_code": record.room_code,
+            "game_mode": "classic",
+            "status": record.status,
+            "players": {
+                side: {
+                    "side": side,
+                    "name": player.get("name", side.title()),
+                    "avatar": player.get("avatar"),
+                    "connected": player.get("connected", False),
+                }
+                for side, player in raw_players.items()
+            },
+            "current_turn": (
+                "white" if len(saved_state.get("moves", [])) % 2 == 0 else "black"
+            ),
+            "spectator_count": manager.spectator_count(f"classic:{record.room_code}"),
+            "started_at": started_at.isoformat() if started_at else None,
+            "duration_seconds": max(0, int((now - started_at).total_seconds())) if started_at else 0,
+        })
+    return games
+
+@app.get("/spectator/replays")
+def list_public_spectator_replays(db: Session = Depends(get_db)):
+    """Lists recent completed public online matches with persisted move records."""
+    records = db.query(MatchRecordModel).order_by(
+        MatchRecordModel.completed_at.desc()
+    ).limit(100).all()
+    replays = []
+    for match in records:
+        room = db.query(RoomModel).filter(RoomModel.room_code == match.room_code).first()
+        classic_record = db.query(ClassicRoomModel).filter(
+            ClassicRoomModel.room_code == match.room_code
+        ).first()
+        if room and room.status == "COMPLETED":
+            try:
+                settings = json.loads(room.settings_json or "{}")
+                players = json.loads(room.players_json or "{}")
+                state = json.loads(room.state_json or "{}")
+            except (TypeError, json.JSONDecodeError):
+                logger.exception("Could not decode completed room %s", match.room_code)
+                continue
+            if settings.get("is_private", True):
+                continue
+            player_names = [player.get("name", "Player") for player in players.values()]
+            result = f"Player {state.get('winner')} wins" if state.get("winner") else "Draw"
+        elif classic_record and classic_record.status == "COMPLETED":
+            if classic_record.is_private or classic_record.mode != "online":
+                continue
+            try:
+                players = json.loads(classic_record.players_json or "{}")
+                state = json.loads(classic_record.state_json or "{}")
+            except (TypeError, json.JSONDecodeError):
+                logger.exception("Could not decode completed classic room %s", match.room_code)
+                continue
+            player_names = [player.get("name", side.title()) for side, player in players.items()]
+            result = state.get("result") or "Game completed"
+        else:
+            continue
+        replays.append({
+            "match_id": match.match_id,
+            "room_code": match.room_code,
+            "game_mode": match.game_mode,
+            "players": player_names,
+            "result": result,
+            "duration_seconds": match.duration_seconds,
+            "completed_at": match.completed_at,
+        })
+    return replays
+
+@app.get("/spectator/replays/{match_id}")
+def get_public_spectator_replay(match_id: str, db: Session = Depends(get_db)):
+    """Returns verified stored move history and positions for a public match."""
+    match = db.query(MatchRecordModel).filter(
+        MatchRecordModel.match_id == match_id
+    ).first()
+    if match is None:
+        raise HTTPException(status_code=404, detail="Replay not found")
+
+    room = db.query(RoomModel).filter(RoomModel.room_code == match.room_code).first()
+    classic_record = db.query(ClassicRoomModel).filter(
+        ClassicRoomModel.room_code == match.room_code
+    ).first()
+    try:
+        moves = json.loads(match.moves_json or "[]")
+    except (TypeError, json.JSONDecodeError) as error:
+        logger.exception("Could not decode move history for match %s", match_id)
+        raise HTTPException(status_code=500, detail="Replay history is invalid") from error
+    if not isinstance(moves, list):
+        raise HTTPException(status_code=500, detail="Replay history is invalid")
+
+    if room and room.status == "COMPLETED":
+        try:
+            settings = json.loads(room.settings_json or "{}")
+            players = json.loads(room.players_json or "{}")
+            final_state = json.loads(room.state_json or "{}")
+        except (TypeError, json.JSONDecodeError) as error:
+            logger.exception("Could not decode completed room %s", match.room_code)
+            raise HTTPException(status_code=500, detail="Replay metadata is invalid") from error
+        if settings.get("is_private", True):
+            raise HTTPException(status_code=404, detail="Replay not found")
+        if len(moves) > 1000:
+            raise HTTPException(status_code=413, detail="Replay exceeds the supported move limit")
+        engine = FourPlayerChessEngine()
+        positions = [_spectator_four_position(engine)]
+        for item in moves:
+            try:
+                move = Move(tuple(item["from"]), tuple(item["to"]), item.get("promotion"))
+            except (KeyError, TypeError) as error:
+                logger.exception("Invalid four-player move in replay %s", match_id)
+                raise HTTPException(status_code=500, detail="Replay history is invalid") from error
+            success, message = engine.make_move(move)
+            if not success:
+                logger.error("Stored move rejected while replaying %s: %s", match_id, message)
+                raise HTTPException(status_code=500, detail="Replay history is invalid")
+            positions.append(_spectator_four_position(engine))
+        return {
+            "match_id": match.match_id,
+            "room_code": match.room_code,
+            "game_mode": "four_player",
+            "players": [player.get("name", "Player") for player in players.values()],
+            "result": f"Player {final_state.get('winner')} wins" if final_state.get("winner") else "Draw",
+            "moves": moves,
+            "positions": positions,
+        }
+
+    if classic_record and classic_record.status == "COMPLETED":
+        if classic_record.is_private or classic_record.mode != "online":
+            raise HTTPException(status_code=404, detail="Replay not found")
+        import chess
+
+        board = chess.Board()
+        positions = [board.fen()]
+        for item in moves:
+            try:
+                move = chess.Move.from_uci(item["uci"])
+            except (KeyError, TypeError, ValueError) as error:
+                logger.exception("Invalid classic move in replay %s", match_id)
+                raise HTTPException(status_code=500, detail="Replay history is invalid") from error
+            if move not in board.legal_moves:
+                raise HTTPException(status_code=500, detail="Replay history is invalid")
+            board.push(move)
+            positions.append(board.fen())
+        try:
+            players = json.loads(classic_record.players_json or "{}")
+            final_state = json.loads(classic_record.state_json or "{}")
+        except (TypeError, json.JSONDecodeError) as error:
+            logger.exception("Could not decode completed classic room %s", match.room_code)
+            raise HTTPException(status_code=500, detail="Replay metadata is invalid") from error
+        return {
+            "match_id": match.match_id,
+            "room_code": match.room_code,
+            "game_mode": "classic",
+            "players": [player.get("name", side.title()) for side, player in players.items()],
+            "result": final_state.get("result") or "Game completed",
+            "moves": moves,
+            "positions": positions,
+        }
+
+    raise HTTPException(status_code=404, detail="Replay not found")
 
 @app.post("/rooms/{room_code}/start")
 async def start_room(room_code: str, req: ResignRequest, db: Session = Depends(get_db)):
@@ -793,7 +1012,155 @@ async def websocket_endpoint(
                 "players": _sanitize_players(room_data["players"])
             })
 
+@app.websocket("/ws/spectate/{room_code}")
+async def four_player_spectator_websocket(
+    websocket: WebSocket,
+    room_code: str,
+    db: Session = Depends(get_db),
+):
+    code = room_code.strip().upper()
+    room_data = get_or_create_room_runtime(db, code)
+    if room_data is None or room_data["status"] != "PLAYING":
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+    await websocket.accept()
+    try:
+        raw_auth = await asyncio.wait_for(websocket.receive_text(), timeout=5)
+        if len(raw_auth) > 4096:
+            raise ValueError("Authentication message is too large")
+        auth = json.loads(raw_auth)
+    except (asyncio.TimeoutError, json.JSONDecodeError, ValueError, WebSocketDisconnect):
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+    if not isinstance(auth, dict) or auth.get("type") not in {"AUTH", "SPECTATE"}:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+    if _settings(room_data)["is_private"]:
+        token = auth.get("access_token")
+        spectator_token = room_data.get("spectator_token")
+        authorized = (
+            isinstance(token, str)
+            and isinstance(spectator_token, str)
+            and secrets.compare_digest(token, spectator_token)
+        )
+        if not authorized:
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+            return
+
+    client_ip = websocket.client.host if websocket.client else "unknown"
+    spectator_id = str(uuid.uuid4())
+    try:
+        await manager.connect_spectator(code, spectator_id, websocket, client_ip, accepted=True)
+    except ValueError:
+        await websocket.close(code=status.WS_1013_TRY_AGAIN_LATER)
+        return
+
+    started_at = room_data.get("started_at")
+    sync = {
+        "type": "SYNC_STATE",
+        "room_code": code,
+        "game_mode": "four_player",
+        "status": room_data["status"],
+        "settings": {
+            "game_mode": "four_player",
+            "time_control": _settings(room_data).get("time_control", "unlimited"),
+        },
+        "players": _sanitize_players(room_data["players"]),
+        "game_state": room_data["engine"].get_state(),
+        "move_history": list(room_data["engine"].move_history),
+        "spectator_count": manager.spectator_count(code),
+        "started_at": started_at.isoformat() if started_at else None,
+        "server_time": time.time(),
+    }
+    await websocket.send_text(json.dumps(sync))
+    await manager.broadcast_to_room(code, {
+        "type": "SPECTATOR_COUNT",
+        "spectator_count": manager.spectator_count(code),
+    })
+    try:
+        while True:
+            try:
+                raw_message = await asyncio.wait_for(websocket.receive_text(), timeout=15)
+            except asyncio.TimeoutError:
+                now = datetime.now(timezone.utc)
+                elapsed = 0
+                if started_at:
+                    start_time = started_at
+                    if start_time.tzinfo is None:
+                        start_time = start_time.replace(tzinfo=timezone.utc)
+                    elapsed = max(0, int((now - start_time).total_seconds()))
+                await websocket.send_text(json.dumps({
+                    "type": "TIMER_SYNC",
+                    "server_time": time.time(),
+                    "duration_seconds": elapsed,
+                }))
+                continue
+            if len(raw_message) > 4096:
+                await websocket.send_text(json.dumps({
+                    "type": "ERROR", "message": "Message is too large",
+                }))
+                continue
+            try:
+                payload = json.loads(raw_message)
+            except json.JSONDecodeError:
+                await websocket.send_text(json.dumps({
+                    "type": "ERROR", "message": "Invalid message format",
+                }))
+                continue
+            if isinstance(payload, dict) and payload.get("type") == "PING":
+                await websocket.send_text(json.dumps({
+                    "type": "PONG",
+                    "server_time": time.time(),
+                    "duration_seconds": _elapsed_seconds(started_at),
+                }))
+            else:
+                await websocket.send_text(json.dumps({
+                    "type": "ERROR",
+                    "message": "Spectator connections are read-only",
+                }))
+    except WebSocketDisconnect:
+        pass
+    except RuntimeError as error:
+        logger.info("Spectator socket for room %s disconnected during send: %s", code, error)
+    finally:
+        manager.disconnect_spectator(code, spectator_id, websocket)
+        await manager.broadcast_to_room(code, {
+            "type": "SPECTATOR_COUNT",
+            "spectator_count": manager.spectator_count(code),
+        })
+
 # ----------------- HELPER FUNCTIONS -----------------
+
+def _elapsed_seconds(started_at: Optional[datetime]) -> int:
+    if started_at is None:
+        return 0
+    start_time = started_at
+    if start_time.tzinfo is None:
+        start_time = start_time.replace(tzinfo=timezone.utc)
+    return max(0, int((datetime.now(timezone.utc) - start_time).total_seconds()))
+
+def _spectator_four_position(engine: FourPlayerChessEngine) -> Dict[str, Any]:
+    board = []
+    for row_index, row in enumerate(engine.board):
+        serialized_row = []
+        for column_index, piece in enumerate(row):
+            if not is_valid_square(row_index, column_index):
+                serialized_row.append("VOID")
+            elif piece is None:
+                serialized_row.append(None)
+            else:
+                serialized_row.append(piece.to_dict())
+        board.append(serialized_row)
+    return {
+        "board": board,
+        "current_turn": engine.current_turn,
+        "active_players": list(engine.active_players),
+        "eliminated_players": list(engine.eliminated_players),
+        "winner": engine.winner,
+        "is_game_over": engine.is_game_over,
+        "turn_number": engine.turn_number,
+        "last_move": engine.last_move.to_dict() if engine.last_move else None,
+    }
 
 def _sanitize_players(players: Dict[int, Dict[str, Any]]) -> Dict[str, Any]:
     """Sanitizes player objects removing private secret player_ids for client broadcast."""
@@ -806,6 +1173,7 @@ def _sanitize_players(players: Dict[int, Dict[str, Any]]) -> Dict[str, Any]:
             "connected": info.get("connected", False),
             "ready": info.get("ready", False),
             "host": info.get("host", False),
+            "avatar": info.get("avatar"),
         }
     return sanitized
 

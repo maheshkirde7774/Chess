@@ -16,6 +16,7 @@ class CreateRoomResponse(BaseModel):
     player_role: int
     player_name: str
     message: str
+    spectator_token: Optional[str] = None
 
 class JoinRoomRequest(BaseModel):
     room_code: str = Field(..., min_length=4, max_length=10)
@@ -27,6 +28,7 @@ class JoinRoomResponse(BaseModel):
     player_role: int
     player_name: str
     message: str
+    spectator_token: Optional[str] = None
 
 class MoveRequest(BaseModel):
     player_id: str
