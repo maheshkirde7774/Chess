@@ -101,8 +101,20 @@ class ClassicChessUI {
         document.getElementById("classic-start-local")?.addEventListener("click", () => {
             this.startRoom("local");
         });
-        document.getElementById("classic-start-match")?.addEventListener("click", () => {
-            this.send({ type: "START_GAME" });
+        document.getElementById("classic-start-match")?.addEventListener("click", async () => {
+            if (this.socket?.readyState === WebSocket.OPEN) {
+                this.send({ type: "START_GAME" });
+            } else {
+                try {
+                    const data = await this.request(`/classic/rooms/${encodeURIComponent(this.roomCode)}/start`, {
+                        method: "POST",
+                        body: JSON.stringify({ player_id: this.playerId }),
+                    });
+                    this.render(data);
+                } catch (error) {
+                    this.app.showToast(error.message, true);
+                }
+            }
         });
         document.getElementById("classic-ready")?.addEventListener("click", (event) => {
             const button = event.currentTarget;
@@ -400,6 +412,18 @@ class ClassicChessUI {
         };
     }
 
+    safePlaySound(name, ...args) {
+        try {
+            if (window.soundSystem && typeof window.soundSystem[name] === "function") {
+                window.soundSystem[name](...args);
+            } else if (window.soundSystem && name === "playGameStart" && typeof window.soundSystem.playStart === "function") {
+                window.soundSystem.playStart(...args);
+            }
+        } catch (error) {
+            console.warn(`[ClassicChess] Sound ${name} failed to play:`, error);
+        }
+    }
+
     send(message) {
         if (this.socket?.readyState === WebSocket.OPEN) {
             if (message.type === "PING") this.lastPingAt = Date.now();
@@ -422,16 +446,16 @@ class ClassicChessUI {
         if (!this.state) return;
         const status = data.status || this.state.status;
         if (this.state.moves.length < previousMoveCount) this.lastRenderedMoveCount = 0;
-        if (status === "PLAYING" && !wasPlaying) window.soundSystem.playGameStart();
+        if (status === "PLAYING" && !wasPlaying) this.safePlaySound("playGameStart");
         if (this.state.moves.length > previousMoveCount) {
             const lastMove = this.state.moves[this.state.moves.length - 1];
-            if (lastMove.san?.includes("x")) window.soundSystem.playCapture();
-            else window.soundSystem.playMove();
-            if (this.state.in_check) window.soundSystem.playCheck();
+            if (lastMove.san?.includes("x")) this.safePlaySound("playCapture");
+            else this.safePlaySound("playMove");
+            if (this.state.in_check) this.safePlaySound("playCheck");
         }
         if (status === "COMPLETED" && !wasCompleted) {
-            if (this.state.termination === "checkmate") window.soundSystem.playCheckmate();
-            else window.soundSystem.playVictory("completion");
+            if (this.state.termination === "checkmate") this.safePlaySound("playCheckmate");
+            else this.safePlaySound("playVictory", "completion");
         }
         this.ai = data.ai || this.ai || {};
         const thinking = data.ai_thinking === true;
@@ -568,7 +592,9 @@ class ClassicChessUI {
     }
 
     selectSquare(square) {
-        if (!this.state || this.state.status !== "PLAYING") return;
+        if (!this.state || this.state.status !== "PLAYING" || this.roomStatus !== "PLAYING") {
+            return;
+        }
         if (this.mode !== "local" && this.mySide !== this.state.turn) return;
         if (this.selectedSquare && this.state.legal_moves.some(move =>
             move.from === this.selectedSquare && move.to === square

@@ -329,7 +329,12 @@ def _public_state(code: str, room: Dict[str, Any]) -> Dict[str, Any]:
     server_time = time.time()
     game_state = room["game"].snapshot(server_time)
     if room["status"] == "WAITING":
-        game_state["status"] = "WAITING"
+        effective_status = "WAITING"
+    elif game_state.get("result"):
+        effective_status = "COMPLETED"
+    else:
+        effective_status = "PLAYING"
+    game_state["status"] = effective_status
     return {
         "room_code": code,
         "server_time": server_time,
@@ -347,7 +352,7 @@ def _public_state(code: str, room: Dict[str, Any]) -> Dict[str, Any]:
         ),
         "ai": room.get("ai", {}),
         "ai_thinking": room.get("ai_thinking", False),
-        "status": game_state["status"] if room["mode"] == "local" or len(room["players"]) == 2 else "WAITING",
+        "status": effective_status,
         "players": _sanitize_players(room["players"]),
         "game_state": game_state,
     }
@@ -443,9 +448,8 @@ def create_classic_room(
     if request.human_side not in {"white", "black"}:
         raise HTTPException(status_code=422, detail="Human side must be white or black")
     profile = profile_from_authorization(http_request.headers.get("authorization"), db)
-    started = mode == "local"
     game_active = mode in {"local", "ai"}
-    game = ClassicGame(control, started)
+    game = ClassicGame(control, started=game_active)
     if profile and mode == "local":
         player_name = profile.username
     elif profile:
@@ -459,7 +463,7 @@ def create_classic_room(
                   "profile_id": profile.id if profile else None,
                   "avatar": profile.avatar if profile else None}
     }
-    if started:
+    if mode == "local":
         players["black"] = {"player_id": white_id, "name": "Black", "connected": False, "ready": True}
     if mode == "ai":
         human_side = request.human_side
@@ -485,7 +489,7 @@ def create_classic_room(
             "players": players, "game": game, "is_private": request.is_private,
             "spectator_token": spectator_token,
             "match_id": str(uuid.uuid4()),
-            "started_at": datetime.now(timezone.utc) if started else None,
+            "started_at": datetime.now(timezone.utc) if game_active else None,
             "ai": ai_config, "ai_thinking": False, "generation": 0,
             "ai_cancel": threading.Event()}
     classic_rooms[code] = room

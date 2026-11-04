@@ -278,17 +278,41 @@ class SoundSystem {
     }
 
     playGameStart() {
-        if (!this.isEventEnabled("start")) return;
-        this._playNotificationTone([440, 659.25], 0.1);
+        try {
+            if (!this.isEventEnabled("start")) return;
+            this._playNotificationTone([440, 659.25], 0.1);
+        } catch (err) {
+            console.warn("[SoundSystem] playGameStart error:", err);
+        }
+    }
+
+    playStart() {
+        this.playGameStart();
+    }
+
+    playStartMatch() {
+        this.playGameStart();
+    }
+
+    playMatchStart() {
+        this.playGameStart();
     }
 
     playCheckmate() {
-        this.playVictory("checkmate");
+        try {
+            this.playVictory("checkmate");
+        } catch (err) {
+            console.warn("[SoundSystem] playCheckmate error:", err);
+        }
     }
 
     playNotification() {
-        if (!this.isEventEnabled("notification")) return;
-        this._playNotificationTone([880], 0.055);
+        try {
+            if (!this.isEventEnabled("notification")) return;
+            this._playNotificationTone([880], 0.055);
+        } catch (err) {
+            console.warn("[SoundSystem] playNotification error:", err);
+        }
     }
 
     _playNotificationTone(frequencies, volume) {
@@ -311,5 +335,17 @@ class SoundSystem {
     }
 }
 
-// Global sound system instance
-window.soundSystem = new SoundSystem();
+// Global sound system instance with robust fallback and prototype binding
+if (typeof window !== "undefined") {
+    window.SoundSystem = SoundSystem;
+    if (!window.soundSystem) {
+        window.soundSystem = new SoundSystem();
+    } else {
+        const proto = SoundSystem.prototype;
+        for (const name of Object.getOwnPropertyNames(proto)) {
+            if (typeof proto[name] === "function" && typeof window.soundSystem[name] !== "function") {
+                window.soundSystem[name] = proto[name].bind(window.soundSystem);
+            }
+        }
+    }
+}
