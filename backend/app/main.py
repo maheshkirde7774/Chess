@@ -172,12 +172,35 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# Enable CORS for web frontend & mobile apps (Capacitor)
+DEFAULT_ALLOWED_ORIGINS = [
+    "http://localhost",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+    "http://localhost:8080",
+    "http://127.0.0.1:8080",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "capacitor://localhost",
+    "https://localhost",
+]
+
+env_cors = os.getenv("CORS_ORIGINS", os.getenv("FOURX_ALLOWED_ORIGINS", ""))
+if env_cors and env_cors != "*":
+    allowed_origins = [origin.strip() for origin in env_cors.split(",") if origin.strip()]
+    for origin in DEFAULT_ALLOWED_ORIGINS:
+        if origin not in allowed_origins:
+            allowed_origins.append(origin)
+else:
+    allowed_origins = list(DEFAULT_ALLOWED_ORIGINS)
+
+# Enable CORS with explicit origins for web frontend & mobile apps (Capacitor)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 

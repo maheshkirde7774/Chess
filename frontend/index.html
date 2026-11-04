@@ -63,13 +63,9 @@
                     
                     <!-- 1. Hero Branding & Showcase Header -->
                     <div class="home-hero-card">
-                        <div class="hero-brand-row">
-                            <img class="hero-wordmark" src="assets/fourx-wordmark.svg" alt="FOURX — FOUR PLAYERS. ONE BATTLE.">
-                        </div>
-
-                        <!-- Staunton Visual Showcase on Quadrant Pedestal -->
-                        <div class="hero-showcase-panel" aria-hidden="true">
-                            <div class="pedestal-stage">
+                        <div class="hero-content-wrapper">
+                            <!-- Staunton Visual Showcase on Quadrant Pedestal -->
+                            <div class="pedestal-stage" aria-hidden="true">
                                 <div class="pedestal-quadrant-glow south-glow"></div>
                                 <div class="pedestal-quadrant-glow west-glow"></div>
                                 <div class="pedestal-quadrant-glow north-glow"></div>
@@ -113,11 +109,20 @@
                                     </svg>
                                 </div>
                             </div>
-                            <div class="hero-arena-tags">
-                                <span class="arena-tag-chip">160 Active Squares</span>
-                                <span class="arena-tag-chip">4 Distinct Armies</span>
-                                <span class="arena-tag-chip">Clockwise Turns</span>
-                                <span class="arena-tag-chip">Server-Authoritative</span>
+
+                            <div class="hero-titles">
+                                <div class="hero-eyebrow-row">
+                                    <span class="hero-eyebrow">FOURX ARENA</span>
+                                    <span class="hero-version-chip">14×14 CROSS</span>
+                                </div>
+                                <h2 class="hero-app-title">Four Armies. One Crown.</h2>
+                                <p class="hero-app-tagline">Conquer the 160-square battlefield in live 4-player combat or standard 1v1 chess.</p>
+                                <div class="hero-arena-tags">
+                                    <span class="arena-tag-chip">160 Active Squares</span>
+                                    <span class="arena-tag-chip">4 Distinct Armies</span>
+                                    <span class="arena-tag-chip">Clockwise Turns</span>
+                                    <span class="arena-tag-chip">1v1 Classic Mode</span>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1044,6 +1049,11 @@
             <!-- VIEW: FOURX PREMIUM -->
             <section id="view-membership" class="app-view">
                 <div class="dashboard-scrollable premium-scrollable">
+                    <div class="membership-top-bar">
+                        <button id="btn-membership-back" class="neon-btn secondary-btn membership-back-btn" type="button">
+                            ← Back to Dashboard
+                        </button>
+                    </div>
                     <section class="premium-hero">
                         <span class="premium-eyebrow">FOURX MEMBERSHIP</span>
                         <h2>Play free. Make it yours.</h2>

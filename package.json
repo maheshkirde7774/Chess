@@ -6,6 +6,8 @@
   "scripts": {
     "start": "python backend/run.py",
     "test": "pytest backend/tests",
+    "test:backend": "pytest backend/tests",
+    "test:frontend": "node --test frontend/tests/*.test.js",
     "backup": "python scripts/create_backup.py",
     "cap:sync": "cap sync",
     "cap:open:android": "cap open android",

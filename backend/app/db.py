@@ -4,6 +4,7 @@ SQLite Database Configuration and ORM Models for Neon Four Chess
 
 import os
 import datetime
+import hashlib
 from sqlalchemy import Boolean, create_engine, Column, Integer, String, DateTime, Text, UniqueConstraint, Index, inspect, text
 from sqlalchemy.orm import declarative_base, sessionmaker
 
@@ -390,6 +391,15 @@ def init_db():
                 "ALTER TABLE match_records ADD COLUMN is_rated BOOLEAN NOT NULL DEFAULT FALSE"
             ))
     profile_columns = {column["name"] for column in inspect(engine).get_columns("player_profiles")}
+    if "token_hash" not in profile_columns:
+        with engine.begin() as connection:
+            connection.execute(text("ALTER TABLE player_profiles ADD COLUMN token_hash VARCHAR(64)"))
+        if "token" in profile_columns:
+            with engine.begin() as connection:
+                rows = connection.execute(text("SELECT id, token FROM player_profiles WHERE token IS NOT NULL AND token_hash IS NULL")).fetchall()
+                for row_id, raw_token in rows:
+                    thash = hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
+                    connection.execute(text("UPDATE player_profiles SET token_hash = :th WHERE id = :pid"), {"th": thash, "pid": row_id})
     if "is_suspended" not in profile_columns:
         with engine.begin() as connection:
             connection.execute(text(

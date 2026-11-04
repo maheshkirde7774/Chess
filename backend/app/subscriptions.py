@@ -262,36 +262,38 @@ def _subscription_details(
     if expires_at is None:
         raise InvalidPurchase
     auto_renewing = item.get("autoRenewingPlan")
+    auto_renew_enabled = bool(
+        auto_renewing.get("autoRenewEnabled")
+        if isinstance(auto_renewing, dict)
+        else False
+    )
     recurring_price = (
         auto_renewing.get("recurringPrice")
         if isinstance(auto_renewing, dict)
         else None
     )
-    if not isinstance(recurring_price, dict):
-        raise InvalidPurchase
-    try:
-        amount_micros = (
-            int(recurring_price["units"]) * 1_000_000
-            + int(recurring_price.get("nanos", 0)) // 1000
-        )
-    except (KeyError, TypeError, ValueError):
-        raise InvalidPurchase from None
-    expected_micros = PLAY_PRODUCTS[item["productId"]]["price_minor"] * 10_000
-    if (
-        recurring_price.get("currencyCode") != "INR"
-        or amount_micros != expected_micros
-    ):
+    if isinstance(recurring_price, dict):
+        try:
+            amount_micros = (
+                int(recurring_price["units"]) * 1_000_000
+                + int(recurring_price.get("nanos", 0)) // 1000
+            )
+        except (KeyError, TypeError, ValueError):
+            raise InvalidPurchase from None
+        expected_micros = PLAY_PRODUCTS[item["productId"]]["price_minor"] * 10_000
+        if (
+            recurring_price.get("currencyCode") != "INR"
+            or amount_micros != expected_micros
+        ):
+            raise InvalidPurchase
+    elif status == "active" and auto_renew_enabled:
         raise InvalidPurchase
     return {
         "product_id": item["productId"],
         "status": status,
         "purchase_date": _parse_utc(response.get("startTime")),
         "expires_at": expires_at,
-        "auto_renew_enabled": bool(
-            auto_renewing.get("autoRenewEnabled")
-            if isinstance(auto_renewing, dict)
-            else False
-        ),
+        "auto_renew_enabled": auto_renew_enabled,
         "acknowledgement_state": response.get("acknowledgementState", "unknown"),
         "linked_purchase_token": response.get("linkedPurchaseToken"),
         "obfuscated_account_id": (

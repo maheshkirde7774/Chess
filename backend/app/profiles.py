@@ -194,10 +194,11 @@ def _authenticated_profile(
     token = authorization[7:]
     if len(token) < 40 or len(token) > 160:
         raise HTTPException(status_code=401, detail="Invalid profile credential")
+    computed_hash = _token_hash(token)
     profile = db.query(PlayerProfileModel).filter(
-        PlayerProfileModel.token_hash == _token_hash(token)
+        PlayerProfileModel.token_hash == computed_hash
     ).first()
-    if profile is None:
+    if profile is None or not secrets.compare_digest(profile.token_hash, computed_hash):
         raise HTTPException(status_code=401, detail="Invalid profile credential")
     if profile.is_suspended or profile.deleted_at is not None:
         raise HTTPException(status_code=403, detail="This profile is unavailable")

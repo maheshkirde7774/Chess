@@ -176,3 +176,91 @@ def test_verified_cancelled_subscription_remains_entitled_until_expiry(
     expired = client.get("/api/subscription/status", headers=headers)
     assert expired.status_code == 200
     assert expired.json()["premium"] is False
+
+
+def test_canceled_subscription_response_without_recurring_price_parses_cleanly():
+    response = {
+        "subscriptionState": "SUBSCRIPTION_STATE_CANCELED",
+        "startTime": "2026-11-01T10:00:00Z",
+        "acknowledgementState": "ACKNOWLEDGEMENT_STATE_ACKNOWLEDGED",
+        "lineItems": [{
+            "productId": "fourx_premium_monthly",
+            "expiryTime": "2026-12-01T10:00:00Z",
+            "autoRenewingPlan": {
+                "autoRenewEnabled": False,
+            },
+        }],
+    }
+    details = subscriptions._subscription_details(response, "fourx_premium_monthly")
+    assert details["status"] == "canceled"
+    assert details["auto_renew_enabled"] is False
+    assert details["product_id"] == "fourx_premium_monthly"
+
+
+def test_grace_period_subscription_response_parses_cleanly():
+    response = {
+        "subscriptionState": "SUBSCRIPTION_STATE_IN_GRACE_PERIOD",
+        "startTime": "2026-11-01T10:00:00Z",
+        "acknowledgementState": "ACKNOWLEDGEMENT_STATE_ACKNOWLEDGED",
+        "lineItems": [{
+            "productId": "fourx_premium_yearly",
+            "expiryTime": "2027-11-01T10:00:00Z",
+        }],
+    }
+    details = subscriptions._subscription_details(response, "fourx_premium_yearly")
+    assert details["status"] == "in_grace_period"
+    assert details["product_id"] == "fourx_premium_yearly"
+
+
+def test_active_subscription_missing_recurring_price_is_rejected():
+    response = {
+        "subscriptionState": "SUBSCRIPTION_STATE_ACTIVE",
+        "startTime": "2026-11-01T10:00:00Z",
+        "acknowledgementState": "ACKNOWLEDGEMENT_STATE_ACKNOWLEDGED",
+        "lineItems": [{
+            "productId": "fourx_premium_monthly",
+            "expiryTime": "2026-12-01T10:00:00Z",
+            "autoRenewingPlan": {
+                "autoRenewEnabled": True,
+            },
+        }],
+    }
+    with pytest.raises(subscriptions.InvalidPurchase):
+        subscriptions._subscription_details(response, "fourx_premium_monthly")
+
+
+def test_foreign_currency_is_strictly_rejected():
+    response = {
+        "subscriptionState": "SUBSCRIPTION_STATE_ACTIVE",
+        "startTime": "2026-11-01T10:00:00Z",
+        "acknowledgementState": "ACKNOWLEDGEMENT_STATE_ACKNOWLEDGED",
+        "lineItems": [{
+            "productId": "fourx_premium_monthly",
+            "expiryTime": "2026-12-01T10:00:00Z",
+            "autoRenewingPlan": {
+                "autoRenewEnabled": True,
+                "recurringPrice": {
+                    "currencyCode": "USD",
+                    "units": "49",
+                    "nanos": 0,
+                },
+            },
+        }],
+    }
+    with pytest.raises(subscriptions.InvalidPurchase):
+        subscriptions._subscription_details(response, "fourx_premium_monthly")
+
+
+def test_paused_or_on_hold_record_is_not_entitled():
+    now = get_utc_now()
+    on_hold_record = _verified_record("p1", status="on_hold")
+    paused_record = _verified_record("p2", status="paused")
+    grace_record = _verified_record("p3", status="in_grace_period")
+    active_record = _verified_record("p4", status="active")
+    canceled_record = _verified_record("p5", status="canceled")
+
+    assert subscriptions._record_is_entitled(on_hold_record, now) is False
+    assert subscriptions._record_is_entitled(paused_record, now) is False
+    assert subscriptions._record_is_entitled(grace_record, now) is True
+    assert subscriptions._record_is_entitled(active_record, now) is True
+    assert subscriptions._record_is_entitled(canceled_record, now) is True

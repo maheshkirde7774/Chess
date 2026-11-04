@@ -82,7 +82,11 @@ class QuadChessApp {
             setTimeout(() => this.ui?.resizeBoard?.(), 40);
         } else {
             appRoot?.classList.remove("in-game-view");
-            backBtn?.classList.add("hidden");
+            if (viewId === "view-membership") {
+                backBtn?.classList.remove("hidden");
+            } else {
+                backBtn?.classList.add("hidden");
+            }
             turnBadge?.classList.add("hidden");
             roomCodeTag?.classList.add("hidden");
         }
@@ -105,6 +109,9 @@ class QuadChessApp {
 
         // Top Navigation Back Button
         document.getElementById("btn-back-home")?.addEventListener("click", () => {
+            this.switchView("view-home");
+        });
+        document.getElementById("btn-membership-back")?.addEventListener("click", () => {
             this.switchView("view-home");
         });
 

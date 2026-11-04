@@ -262,100 +262,89 @@ html, body {
 /* ==================== DASHBOARD / HOME SCREEN ==================== */
 
 .home-scrollable {
-    max-width: 960px;
+    max-width: 1040px;
     margin: 0 auto;
     width: 100%;
-    padding: 16px;
+    padding: 16px 20px;
     padding-bottom: 90px;
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 14px;
 }
 
 /* 1. Hero Presentation Card */
 .home-hero-card {
-    background: linear-gradient(180deg, #161922 0%, #12141c 100%);
-    border: 1px solid var(--border-card);
+    background: linear-gradient(145deg, #161c28 0%, #11141c 55%, #0d0e13 100%);
+    border: 1px solid rgba(14, 165, 233, 0.22);
     border-radius: var(--radius-xl);
-    padding: 22px 24px;
-    display: flex;
-    flex-direction: column;
-    gap: 18px;
-    box-shadow: var(--shadow-md);
+    padding: 18px 22px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.45), 0 0 1px rgba(14, 165, 233, 0.15);
     position: relative;
     overflow: hidden;
 }
 
-.hero-brand-row {
+.hero-content-wrapper {
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: 20px;
+    width: 100%;
 }
 
-.hero-crest {
-    width: 52px;
-    height: 52px;
-    border-radius: 14px;
-    background: #191d27;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 4px;
-    padding: 7px;
-    box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.6), 0 4px 12px rgba(0, 0, 0, 0.4);
-    flex-shrink: 0;
+.hero-eyebrow-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
-.crest-facet {
-    border-radius: 4px;
-    transition: var(--transition-fast);
+.hero-eyebrow {
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 1.4px;
+    color: var(--color-p1);
+    text-transform: uppercase;
 }
-.crest-facet.p1 { background: var(--color-p1); box-shadow: 0 0 8px var(--color-p1-border); }
-.crest-facet.p2 { background: var(--color-p2); box-shadow: 0 0 8px var(--color-p2-border); }
-.crest-facet.p3 { background: var(--color-p3); box-shadow: 0 0 8px var(--color-p3-border); }
-.crest-facet.p4 { background: var(--color-p4); box-shadow: 0 0 8px var(--color-p4-border); }
+
+.hero-version-chip {
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.8px;
+    color: var(--color-p2);
+    background: rgba(236, 72, 153, 0.12);
+    border: 1px solid rgba(236, 72, 153, 0.3);
+    padding: 2px 7px;
+    border-radius: var(--radius-full);
+}
 
 .hero-titles {
     display: flex;
     flex-direction: column;
-    gap: 3px;
+    gap: 5px;
+    flex: 1;
+    min-width: 0;
 }
 
 .hero-app-title {
     font-family: var(--font-heading);
-    font-size: clamp(1.4rem, 4.5vw, 1.85rem);
+    font-size: clamp(1.25rem, 3.2vw, 1.65rem);
     font-weight: 800;
-    letter-spacing: 2.2px;
+    letter-spacing: 1.2px;
     color: var(--color-text-primary);
     margin: 0;
-    line-height: 1.15;
+    line-height: 1.2;
 }
 
 .hero-app-tagline {
-    font-size: clamp(0.82rem, 2.5vw, 0.94rem);
+    font-size: clamp(0.78rem, 2vw, 0.88rem);
     color: var(--color-text-secondary);
     margin: 0;
     line-height: 1.4;
     font-weight: 500;
 }
 
-/* Staunton Visual Showcase */
-.hero-showcase-panel {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    gap: 16px;
-    padding: 16px 20px;
-    background: rgba(11, 13, 18, 0.65);
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-lg);
-}
-
 .pedestal-stage {
     position: relative;
-    width: 76px;
-    height: 76px;
+    width: 72px;
+    height: 72px;
     border-radius: 50%;
     background: radial-gradient(circle, #1f2533 0%, #10131a 100%);
     border: 2px solid #282f40;
@@ -378,8 +367,8 @@ html, body {
 .pedestal-quadrant-glow.east-glow { right: 4px; top: calc(50% - 3.5px); background: var(--color-p4); box-shadow: 0 0 6px var(--color-p4); }
 
 .pedestal-piece-box {
-    width: 54px;
-    height: 54px;
+    width: 50px;
+    height: 50px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -394,18 +383,20 @@ html, body {
 .hero-arena-tags {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: 6px;
+    margin-top: 4px;
 }
 
 .arena-tag-chip {
-    font-size: 0.74rem;
+    font-size: 0.7rem;
     font-weight: 600;
     color: var(--color-text-secondary);
     background: rgba(255, 255, 255, 0.04);
     border: 1px solid var(--border-subtle);
-    padding: 5px 12px;
+    padding: 3px 10px;
     border-radius: var(--radius-full);
     letter-spacing: 0.3px;
+    white-space: nowrap;
 }
 
 /* 2. Main Menu Grid & Cards */
@@ -2622,13 +2613,6 @@ html, body {
 
 /* ==================== PREMIUM HOME SCREEN POLISH ==================== */
 
-/* Hero Card: deeper gradient, subtle border glow */
-.home-hero-card {
-    background: linear-gradient(160deg, #161c28 0%, #0f1117 60%, #0d0e12 100%);
-    border-color: rgba(14, 165, 233, 0.18);
-    box-shadow: 0 0 0 1px rgba(14, 165, 233, 0.06), var(--shadow-lg);
-}
-
 /* Hero King Piece: gentle floating animation */
 @keyframes heroFloat {
     0%, 100% { transform: translateY(0px) rotate(-1deg); }
@@ -2804,23 +2788,27 @@ button:focus-visible {
 
 /* Touch-friendly minimum tap target on mobile */
 @media (max-width: 768px) {
-    .menu-card { min-height: 72px; }
-    .home-scrollable { gap: 12px; padding: 12px; padding-bottom: 90px; }
-    .home-hero-card { padding: 18px 16px; }
+    .menu-card { min-height: 70px; }
+    .home-scrollable { gap: 10px; padding: 12px; padding-bottom: 90px; }
+    .home-hero-card { padding: 14px 16px; }
+    .hero-content-wrapper { gap: 14px; align-items: center; }
     .main-menu-grid { grid-template-columns: 1fr; }
-    .hero-app-title { font-size: clamp(1.25rem, 5vw, 1.6rem); }
-    .pedestal-stage { width: 64px; height: 64px; }
-    .hero-showcase-panel { padding: 12px 14px; }
+    .hero-app-title { font-size: clamp(1.15rem, 4.5vw, 1.35rem); }
+    .hero-app-tagline { font-size: 0.78rem; }
+    .pedestal-stage { width: 56px; height: 56px; flex-shrink: 0; }
+    .pedestal-piece-box { width: 38px; height: 38px; }
+    .hero-arena-tags { gap: 4px; }
+    .arena-tag-chip { font-size: 0.65rem; padding: 2px 8px; }
 }
 
-/* Desktop: two-column menu grid */
+/* Tablet & Desktop: two-column menu grid */
 @media (min-width: 768px) {
-    .main-menu-grid { grid-template-columns: repeat(2, 1fr); }
+    .main-menu-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
     .menu-card-primary { grid-column: 1 / -1; }
-    .home-scrollable { padding: 20px 24px; padding-bottom: 90px; }
+    .home-scrollable { padding: 18px 24px; padding-bottom: 90px; gap: 14px; }
 }
 @media (min-width: 1024px) {
-    .home-scrollable { padding: 24px 32px; padding-bottom: 32px; }
+    .home-scrollable { padding: 20px 28px; padding-bottom: 32px; gap: 14px; }
 }
 
 /* ==================== CLASSIC 1V1 CHESS ==================== */
@@ -3207,6 +3195,18 @@ button:focus-visible {
     display: grid;
     gap: 18px;
     align-content: start;
+}
+.membership-top-bar {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+}
+.membership-back-btn {
+    padding: 8px 16px;
+    font-size: 0.84rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
 }
 .premium-hero,
 .premium-plan-card,
