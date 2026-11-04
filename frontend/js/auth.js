@@ -10,6 +10,8 @@ class FOURXAuth {
         this.currentUser = null;
         this.isAuthenticated = false;
         this.isRegistered = false;
+        this.googleClientId = null;
+        this.gisInitialized = false;
 
         this.init();
     }
@@ -18,6 +20,7 @@ class FOURXAuth {
         this.bindEvents();
         this.checkUrlForOAuthCallback();
         await this.syncAuthStatus();
+        await this.setupGoogleIdentityServices();
     }
 
     getServerUrl() {
@@ -544,6 +547,14 @@ class FOURXAuth {
     }
 
     async logout() {
+        if (window.google?.accounts?.id) {
+            try {
+                window.google.accounts.id.disableAutoSelect();
+            } catch (e) {
+                console.warn("GIS disableAutoSelect error:", e);
+            }
+        }
+
         try {
             await this.request("/api/auth/logout", { method: "POST" });
         } catch (e) {
@@ -564,20 +575,133 @@ class FOURXAuth {
         this.showAuthView("login");
     }
 
+    async setupGoogleIdentityServices() {
+        try {
+            const config = await this.request("/api/auth/google/config");
+            if (!config || !config.configured || !config.client_id) {
+                console.info("Google Identity Services: Client ID not configured on server.");
+                return;
+            }
+            this.googleClientId = config.client_id;
+
+            // Wait for Google Identity Services script to load
+            let attempts = 0;
+            const waitForGis = () => {
+                if (window.google?.accounts?.id) {
+                    this.initializeGisClient();
+                } else if (attempts < 25) {
+                    attempts++;
+                    setTimeout(waitForGis, 200);
+                }
+            };
+            waitForGis();
+        } catch (err) {
+            console.warn("Failed to load Google Auth configuration:", err);
+        }
+    }
+
+    initializeGisClient() {
+        if (!this.googleClientId || !window.google?.accounts?.id || this.gisInitialized) return;
+
+        try {
+            window.google.accounts.id.initialize({
+                client_id: this.googleClientId,
+                callback: (res) => this.handleGoogleCredentialResponse(res),
+                auto_select: false,
+                cancel_on_tap_outside: true,
+                itp_support: true,
+            });
+
+            const gisContainer = document.getElementById("google-gis-btn-container");
+            if (gisContainer) {
+                window.google.accounts.id.renderButton(gisContainer, {
+                    type: "standard",
+                    theme: "filled_black",
+                    size: "large",
+                    text: "continue_with",
+                    shape: "rectangular",
+                    logo_alignment: "left",
+                    width: 320,
+                });
+                // When GIS button renders, hide custom button fallback to avoid duplicates
+                const fallbackBtn = document.getElementById("btn-google-login");
+                if (fallbackBtn) {
+                    fallbackBtn.style.display = "none";
+                }
+            }
+            this.gisInitialized = true;
+        } catch (e) {
+            console.error("GIS initialization error:", e);
+        }
+    }
+
     async handleGoogleLogin() {
         this.clearAlert();
-        try {
-            const data = await this.request("/api/auth/google/url");
-            if (data.configured && data.url) {
-                window.location.href = data.url;
-            } else {
-                this.showAlert(
-                    "Google Sign-In is configured on the backend and waiting for your GOOGLE_CLIENT_ID environment variable. Once set in your cloud deployment, one-click Google Login activates automatically.",
-                    "info"
-                );
+        if (this.gisInitialized && window.google?.accounts?.id) {
+            window.google.accounts.id.prompt((notification) => {
+                if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+                    console.info("GIS prompt status:", notification.getNotDisplayedReason() || notification.getSkippedReason());
+                }
+            });
+        } else {
+            try {
+                const data = await this.request("/api/auth/google/url");
+                if (data.configured && data.url) {
+                    window.location.href = data.url;
+                } else {
+                    this.showAlert(
+                        "Google Sign-In is configured on the backend and waiting for your GOOGLE_CLIENT_ID environment variable. Once set in your cloud deployment, one-click Google Login activates automatically.",
+                        "info"
+                    );
+                }
+            } catch (err) {
+                this.showAlert("Could not initialize Google OAuth. Please check your network connection.");
             }
+        }
+    }
+
+    async handleGoogleCredentialResponse(response) {
+        if (!response || !response.credential) {
+            this.showAlert("Google Sign-In did not provide a credential.");
+            return;
+        }
+
+        this.clearAlert();
+        const submitBtn = document.getElementById("btn-submit-login");
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.textContent = "Verifying with Google…";
+        }
+
+        try {
+            const data = await this.request("/api/auth/google", {
+                method: "POST",
+                body: JSON.stringify({
+                    credential: response.credential,
+                }),
+            });
+
+            this.setToken(data.access_token);
+            this.currentUser = data.profile;
+            this.isAuthenticated = true;
+            this.isRegistered = true;
+
+            if (window.FOURXProfile) {
+                window.FOURXProfile.profile = data.profile;
+                window.FOURXProfile.renderProfile();
+                window.FOURXProfile.loadMatches();
+            }
+
+            this.updateUIForUser(data.profile);
+            window.app?.showToast(`Signed in with Google as ${data.profile.username}!`);
+            window.app?.switchView("view-home");
         } catch (err) {
-            this.showAlert("Could not initialize Google OAuth. Please check your network connection.");
+            this.showAlert(err.message || "Failed to sign in with Google.");
+        } finally {
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.textContent = "Sign In to FOURX";
+            }
         }
     }
 

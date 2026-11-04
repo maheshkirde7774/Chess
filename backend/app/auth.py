@@ -16,6 +16,15 @@ from urllib.request import Request as URLRequest, urlopen
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 
+from dotenv import load_dotenv
+from google.oauth2 import id_token
+from google.auth.transport import requests as google_requests
+
+load_dotenv()
+_root_env = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".env"))
+if os.path.exists(_root_env):
+    load_dotenv(_root_env)
+
 from fastapi import APIRouter, Depends, HTTPException, Header, Request, status
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
@@ -390,6 +399,83 @@ def auth_status(
 # Google OAuth 2.0 Integration
 # ==============================================================================
 
+def verify_google_id_token(credential: str, client_id: str) -> Dict[str, Any]:
+    """
+    Verifies the Google ID token signature, issuer, audience, and expiry
+    using Google's official google-auth library.
+    Never trusts profile claims directly from the client.
+    """
+    try:
+        request = google_requests.Request()
+        id_info = id_token.verify_oauth2_token(credential, request, client_id)
+    except Exception as exc:
+        logger.warning("Google ID token verification failed: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired Google credential token."
+        ) from None
+
+    # Verify issuer
+    issuer = id_info.get("iss")
+    if issuer not in ["accounts.google.com", "https://accounts.google.com"]:
+        logger.warning("Untrusted Google token issuer: %s", issuer)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Untrusted Google token issuer."
+        )
+
+    # Verify audience matches our Client ID
+    aud = id_info.get("aud")
+    if aud != client_id:
+        logger.warning("Google token audience mismatch: expected %s, got %s", client_id, aud)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Google credential was issued for a different client ID."
+        )
+
+    # Verify email is present and verified by Google
+    email = id_info.get("email")
+    if not email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Google account does not provide an email address."
+        )
+
+    if not id_info.get("email_verified", False):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Google email address has not been verified."
+        )
+
+    sub = id_info.get("sub")
+    if not sub:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Google account does not provide a valid subject identifier."
+        )
+
+    name = id_info.get("name") or id_info.get("given_name") or email.split("@")[0] or "Commander"
+    return {
+        "sub": str(sub),
+        "email": email.strip().lower(),
+        "name": str(name).strip(),
+        "picture": id_info.get("picture"),
+    }
+
+
+@router.get("/google/config")
+def google_client_config():
+    """
+    Returns public Google OAuth Client ID for frontend Google Identity Services (GIS).
+    Client Secret is never exposed.
+    """
+    client_id = os.getenv("GOOGLE_CLIENT_ID")
+    return {
+        "configured": bool(client_id),
+        "client_id": client_id,
+    }
+
+
 @router.get("/google/url")
 def google_oauth_url(http_request: Request):
     """Returns Google OAuth 2.0 authorization URL if credentials are configured."""
@@ -423,47 +509,68 @@ def google_token_login(
     authorization: Optional[str] = Header(default=None),
     db: Session = Depends(get_db),
 ):
-    """Authenticates via Google Identity Services ID token credential."""
+    """
+    Authenticates via Google Identity Services (GIS) ID token credential.
+    Verifies signature, issuer, audience, and expiry cryptographically.
+    Links authenticated Google account to user profile securely while preventing
+    insecure email-based account takeovers and preserving anonymous guest profile progress.
+    """
+    enforce_room_rate_limit(http_request, "auth-google", limit=30)
     if not req.credential:
         raise HTTPException(status_code=422, detail="Google credential token is required")
 
-    # Verify ID token with Google's tokeninfo endpoint
-    try:
-        url = f"https://oauth2.googleapis.com/tokeninfo?id_token={req.credential}"
-        request = URLRequest(url, headers={"User-Agent": "FOURX-Chess/1.0"})
-        with urlopen(request, timeout=8) as response:
-            payload = json.loads(response.read().decode("utf-8"))
-    except Exception as e:
-        logger.warning("Google token verification failed: %s", e)
-        raise HTTPException(status_code=401, detail="Google token verification failed") from None
+    client_id = os.getenv("GOOGLE_CLIENT_ID")
+    if not client_id:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Google Sign-In is not configured on the server. Set GOOGLE_CLIENT_ID."
+        )
 
-    google_sub = payload.get("sub")
-    email = payload.get("email", "").lower()
-    name = payload.get("name") or payload.get("given_name") or "Commander"
+    # Cryptographically verify token claims using Google's official library
+    token_claims = verify_google_id_token(req.credential, client_id)
+    google_sub = token_claims["sub"]
+    email = token_claims["email"]
+    name = token_claims["name"]
 
-    if not google_sub or not email:
-        raise HTTPException(status_code=400, detail="Invalid Google profile data")
-
-    # Check for existing user by Google sub or email
+    # 1. Look up existing profile already bound to this Google Subject ID
     profile = db.query(PlayerProfileModel).filter(
         PlayerProfileModel.google_sub == google_sub,
         PlayerProfileModel.deleted_at.is_(None)
     ).first()
 
-    if not profile:
-        profile = db.query(PlayerProfileModel).filter(
+    current_profile = profile_from_authorization(authorization, db)
+
+    if profile:
+        # Existing verified Google user found!
+        if not profile.full_name and name:
+            profile.full_name = name
+    else:
+        # No profile bound to this google_sub yet.
+        # Check if an existing profile has this email_key
+        existing_email_user = db.query(PlayerProfileModel).filter(
             PlayerProfileModel.email_key == email,
             PlayerProfileModel.deleted_at.is_(None)
         ).first()
-        if profile:
-            profile.google_sub = google_sub
-            if not profile.full_name:
-                profile.full_name = name
 
-    current_profile = profile_from_authorization(authorization, db)
-
-    if not profile:
-        if current_profile and not current_profile.email and not current_profile.google_sub:
+        if existing_email_user:
+            # An account with this email exists.
+            # Security rule: Prevent insecure account linking.
+            # If the user is currently authenticated as this exact user, they can link Google.
+            # Otherwise, reject to prevent taking over password-based accounts.
+            if current_profile and current_profile.id == existing_email_user.id:
+                profile = current_profile
+                profile.google_sub = google_sub
+                profile.auth_provider = "google"
+                if not profile.full_name:
+                    profile.full_name = name
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="An account with this email already exists with password authentication. Please sign in with your email and password first, then link Google from your profile."
+                )
+        elif current_profile and not current_profile.email and not current_profile.google_sub:
+            # Seamless upgrade of existing anonymous device profile!
+            # Preserves user's current game rating, stats, XP, and achievements.
             profile = current_profile
             profile.full_name = name
             profile.email = email
@@ -471,14 +578,33 @@ def google_token_login(
             profile.google_sub = google_sub
             profile.auth_provider = "google"
         else:
+            # Create a brand new FOURX profile for this Google user
             import uuid
-            suffix = secrets.randbelow(900_000) + 100_000
-            username = f"Commander{suffix}"
+            # Generate unique username based on name or email prefix
+            base_user = re.sub(r"[^A-Za-z0-9_]", "", name.replace(" ", "_"))
+            if len(base_user) < 3:
+                base_user = re.sub(r"[^A-Za-z0-9_]", "", email.split("@")[0])
+            if len(base_user) < 3:
+                base_user = "Commander"
+            base_user = base_user[:14]
+
+            candidate_username = base_user
+            suffix_num = 1
+            while db.query(PlayerProfileModel.id).filter(
+                PlayerProfileModel.username_key == candidate_username.casefold(),
+                PlayerProfileModel.deleted_at.is_(None)
+            ).first():
+                candidate_username = f"{base_user}_{secrets.randbelow(9000) + 1000}"
+                suffix_num += 1
+                if suffix_num > 20:
+                    candidate_username = f"Commander{secrets.randbelow(900000) + 100000}"
+                    break
+
             profile = PlayerProfileModel(
                 id=str(uuid.uuid4()),
                 full_name=name,
-                username=username,
-                username_key=username.casefold(),
+                username=candidate_username,
+                username_key=candidate_username.casefold(),
                 email=email,
                 email_key=email,
                 google_sub=google_sub,
@@ -494,6 +620,8 @@ def google_token_login(
             db.add(profile)
 
     db.commit()
+    _invalidate_leaderboard_cache()
+
     raw_token = create_user_session(profile, db, http_request)
     return {
         "success": True,

@@ -13,6 +13,13 @@ import re
 import time
 import uuid
 from collections import deque
+from dotenv import load_dotenv
+
+# Load environment configuration (.env)
+load_dotenv()
+_root_env = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".env"))
+if os.path.exists(_root_env):
+    load_dotenv(_root_env)
 from datetime import datetime, timezone
 from typing import Dict, Any, Optional
 from contextlib import asynccontextmanager
@@ -187,7 +194,7 @@ DEFAULT_ALLOWED_ORIGINS = [
     "https://localhost",
 ]
 
-env_cors = os.getenv("CORS_ORIGINS", os.getenv("FOURX_ALLOWED_ORIGINS", ""))
+env_cors = os.getenv("CORS_ORIGINS", os.getenv("FOURX_ALLOWED_ORIGINS", os.getenv("PRODUCTION_ORIGIN", os.getenv("FOURX_PRODUCTION_URL", ""))))
 if env_cors and env_cors != "*":
     allowed_origins = [origin.strip() for origin in env_cors.split(",") if origin.strip()]
     for origin in DEFAULT_ALLOWED_ORIGINS:

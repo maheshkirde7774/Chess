@@ -15,6 +15,9 @@
     <!-- CSS Design Tokens & Stylesheet -->
     <link rel="stylesheet" href="css/neon-theme.css">
     <link rel="stylesheet" href="css/style.css">
+
+    <!-- Google Identity Services (GIS) for Google Sign-In Popup Flow -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
     <div id="app-root">
@@ -1225,6 +1228,7 @@
 
                             <!-- Social OAuth Buttons (Google & Facebook) -->
                             <div class="social-auth-section" id="social-auth-section">
+                                <div id="google-gis-btn-container" class="gis-btn-container"></div>
                                 <button type="button" class="social-auth-btn google-btn" id="btn-google-login">
                                     <svg class="social-icon" width="20" height="20" viewBox="0 0 24 24">
                                         <path fill="#EA4335" d="M12 5c1.6 0 3 .6 4.1 1.6l3.1-3.1C17.3 1.7 14.8 1 12 1 7.5 1 3.7 3.6 1.9 7.3l3.7 2.9C6.5 7.4 9 5 12 5z"/>

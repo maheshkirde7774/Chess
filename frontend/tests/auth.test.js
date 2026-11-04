@@ -66,9 +66,36 @@ describe("FOURX Authentication System Frontend Tests", () => {
         assert.ok(styleSrc.includes(".auth-card"), "auth-card styles must exist");
         assert.ok(styleSrc.includes(".social-auth-btn"), "social-auth-btn styles must exist");
         assert.ok(styleSrc.includes(".neon-btn.gold-btn"), "gold-btn styles must exist");
+        assert.ok(styleSrc.includes(".gis-btn-container"), "gis-btn-container styles must exist");
     });
 
-    test("7. Client Auth Class Logic Verification", () => {
+    test("7. Google Identity Services (GIS) Integration in index.html", () => {
+        assert.ok(
+            htmlSrc.includes("https://accounts.google.com/gsi/client"),
+            "Google Identity Services client library must be included in index.html"
+        );
+        assert.ok(
+            htmlSrc.includes('id="google-gis-btn-container"'),
+            "GIS container google-gis-btn-container must exist in index.html"
+        );
+    });
+
+    test("8. Google Client Secret Kept Completely Out of Frontend Code", () => {
+        const frontendFiles = [
+            htmlSrc,
+            authJsSrc,
+            fs.readFileSync(path.join(__dirname, "../js/config.js"), "utf-8"),
+            fs.readFileSync(path.join(__dirname, "../js/app.js"), "utf-8"),
+            fs.readFileSync(path.join(__dirname, "../js/profile.js"), "utf-8"),
+        ];
+
+        for (const content of frontendFiles) {
+            assert.ok(!content.includes("GOCSPX-"), "Client secret must never be in frontend code");
+            assert.ok(!content.includes("GOOGLE_CLIENT_SECRET"), "GOOGLE_CLIENT_SECRET must never be referenced in frontend code");
+        }
+    });
+
+    test("9. Client Auth Class & GIS Handlers Verification", () => {
         // Mock DOM & storage for FOURXAuth unit tests
         const store = {};
         const mockLocalStorage = {
@@ -81,10 +108,27 @@ describe("FOURX Authentication System Frontend Tests", () => {
         globalThis.CONFIG = { getServerUrl: () => "http://localhost:8000" };
         globalThis.FOURXProfile = { token: null, profile: null };
 
+        let disableAutoSelectCalled = false;
+        globalThis.google = {
+            accounts: {
+                id: {
+                    initialize: () => {},
+                    renderButton: () => {},
+                    prompt: () => {},
+                    disableAutoSelect: () => { disableAutoSelectCalled = true; }
+                }
+            }
+        };
+
         // Test token storage
         mockLocalStorage.setItem("fourx-device-profile-token", "test_bearer_token_abc123");
         assert.equal(mockLocalStorage.getItem("fourx-device-profile-token"), "test_bearer_token_abc123");
         mockLocalStorage.removeItem("fourx-device-profile-token");
         assert.equal(mockLocalStorage.getItem("fourx-device-profile-token"), null);
+
+        // Verify authJs defines GIS methods
+        assert.ok(authJsSrc.includes("setupGoogleIdentityServices"), "auth.js must implement setupGoogleIdentityServices");
+        assert.ok(authJsSrc.includes("handleGoogleCredentialResponse"), "auth.js must implement handleGoogleCredentialResponse");
+        assert.ok(authJsSrc.includes("disableAutoSelect"), "auth.js must call disableAutoSelect on logout");
     });
 });

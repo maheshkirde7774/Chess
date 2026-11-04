@@ -1,5 +1,6 @@
 import pytest
 import os
+from unittest.mock import patch
 from starlette.requests import Request
 from fastapi import HTTPException
 
@@ -8,8 +9,9 @@ from app.auth import (
     hash_password, verify_password,
     register_account, login_account, logout_account,
     forgot_password, reset_password, auth_status,
-    google_oauth_url, facebook_oauth_url,
-    RegisterRequest, LoginRequest, ForgotPasswordRequest, ResetPasswordRequest
+    google_oauth_url, facebook_oauth_url, google_client_config,
+    google_token_login, verify_google_id_token,
+    RegisterRequest, LoginRequest, ForgotPasswordRequest, ResetPasswordRequest, GoogleAuthRequest
 )
 from app.profiles import _authenticated_profile
 
@@ -153,6 +155,198 @@ def test_forgot_and_reset_password_flow(fake_request):
         )
         assert login_res["success"] is True
         assert login_res["access_token"] is not None
+
+    finally:
+        db.close()
+
+
+def test_google_client_config():
+    client_id = "822220189205-test.apps.googleusercontent.com"
+    os.environ["GOOGLE_CLIENT_ID"] = client_id
+    config = google_client_config()
+    assert config["configured"] is True
+    assert config["client_id"] == client_id
+    # Ensure client secret is NEVER present
+    assert "client_secret" not in config
+    assert "GOOGLE_CLIENT_SECRET" not in str(config)
+
+
+def test_verify_google_id_token_validation_rules():
+    client_id = "822220189205-test.apps.googleusercontent.com"
+
+    # 1. Invalid or malformed token string raises 401
+    with pytest.raises(HTTPException) as exc_invalid:
+        verify_google_id_token("malformed.jwt.token", client_id)
+    assert exc_invalid.value.status_code == 401
+
+    # 2. Issuer mismatch
+    with patch("app.auth.id_token.verify_oauth2_token") as mock_verify:
+        mock_verify.return_value = {
+            "iss": "untrusted-issuer.com",
+            "aud": client_id,
+            "sub": "google-12345",
+            "email": "test@gmail.com",
+            "email_verified": True
+        }
+        with pytest.raises(HTTPException) as exc_iss:
+            verify_google_id_token("mock-token", client_id)
+        assert exc_iss.value.status_code == 401
+        assert "issuer" in exc_iss.value.detail.lower()
+
+    # 3. Audience mismatch
+    with patch("app.auth.id_token.verify_oauth2_token") as mock_verify:
+        mock_verify.return_value = {
+            "iss": "https://accounts.google.com",
+            "aud": "wrong-client-id.apps.googleusercontent.com",
+            "sub": "google-12345",
+            "email": "test@gmail.com",
+            "email_verified": True
+        }
+        with pytest.raises(HTTPException) as exc_aud:
+            verify_google_id_token("mock-token", client_id)
+        assert exc_aud.value.status_code == 401
+        assert "audience" in exc_aud.value.detail.lower() or "different" in exc_aud.value.detail.lower()
+
+    # 4. Unverified email
+    with patch("app.auth.id_token.verify_oauth2_token") as mock_verify:
+        mock_verify.return_value = {
+            "iss": "https://accounts.google.com",
+            "aud": client_id,
+            "sub": "google-12345",
+            "email": "unverified@gmail.com",
+            "email_verified": False
+        }
+        with pytest.raises(HTTPException) as exc_unver:
+            verify_google_id_token("mock-token", client_id)
+        assert exc_unver.value.status_code == 400
+        assert "not been verified" in exc_unver.value.detail.lower()
+
+
+def test_google_sign_in_new_user_flow(fake_request):
+    db = SessionLocal()
+    try:
+        client_id = "822220189205-test.apps.googleusercontent.com"
+        os.environ["GOOGLE_CLIENT_ID"] = client_id
+
+        mock_payload = {
+            "iss": "https://accounts.google.com",
+            "aud": client_id,
+            "sub": "google_sub_998877",
+            "email": "grandmaster.magnus@gmail.com",
+            "email_verified": True,
+            "name": "Magnus Carlsen",
+            "picture": "https://lh3.googleusercontent.com/photo.jpg"
+        }
+
+        with patch("app.auth.id_token.verify_oauth2_token", return_value=mock_payload):
+            req = GoogleAuthRequest(credential="valid.google.id_token")
+            res = google_token_login(req, fake_request, authorization=None, db=db)
+
+            assert res["success"] is True
+            assert "access_token" in res
+            profile = res["profile"]
+            assert profile["email"] == "grandmaster.magnus@gmail.com"
+            assert profile["full_name"] == "Magnus Carlsen"
+            assert profile["auth_provider"] == "google"
+            assert profile["is_registered"] is True
+
+            # Subsequent login with same google_sub finds existing profile
+            res_repeat = google_token_login(req, fake_request, authorization=None, db=db)
+            assert res_repeat["success"] is True
+            assert res_repeat["profile"]["id"] == profile["id"]
+
+    finally:
+        db.close()
+
+
+def test_google_sign_in_anonymous_profile_upgrade(fake_request):
+    db = SessionLocal()
+    try:
+        # Create an anonymous guest profile with game stats
+        import uuid, secrets
+        from datetime import datetime, timezone
+        from app.auth import create_user_session
+        from app.profiles import _token_hash
+
+        guest_token = secrets.token_urlsafe(48)
+        guest_profile = PlayerProfileModel(
+            id=str(uuid.uuid4()),
+            username="GuestCommander101",
+            username_key="guestcommander101",
+            avatar="knight",
+            token_hash=_token_hash(guest_token),
+            created_at=datetime.now(timezone.utc),
+            xp=250,
+            classic_rating=1550,
+            four_player_rating=1420,
+            timezone="UTC"
+        )
+        db.add(guest_profile)
+        db.commit()
+
+        client_id = "822220189205-test.apps.googleusercontent.com"
+        os.environ["GOOGLE_CLIENT_ID"] = client_id
+
+        mock_payload = {
+            "iss": "https://accounts.google.com",
+            "aud": client_id,
+            "sub": "google_sub_guest_upgrade_443",
+            "email": "upgraded.commander@gmail.com",
+            "email_verified": True,
+            "name": "Hikaru Nakamura"
+        }
+
+        with patch("app.auth.id_token.verify_oauth2_token", return_value=mock_payload):
+            req = GoogleAuthRequest(credential="guest.upgrade.token")
+            # Pass guest token in authorization header to upgrade
+            res = google_token_login(req, fake_request, authorization=f"Bearer {guest_token}", db=db)
+
+            assert res["success"] is True
+            upgraded = res["profile"]
+            # Verify profile ID and stats are preserved!
+            assert upgraded["id"] == guest_profile.id
+            assert upgraded["email"] == "upgraded.commander@gmail.com"
+            assert upgraded["ratings"]["classic"] == 1550
+            assert upgraded["ratings"]["four_player"] == 1420
+            assert upgraded["total_xp"] == 250
+            assert upgraded["auth_provider"] == "google"
+
+    finally:
+        db.close()
+
+
+def test_google_sign_in_prevents_insecure_linking(fake_request):
+    db = SessionLocal()
+    try:
+        # Register a local password user
+        local_user = RegisterRequest(
+            full_name="Target User",
+            username="target_user_sec",
+            email="target@example.com",
+            password="StrongPassword2026!",
+            confirm_password="StrongPassword2026!"
+        )
+        register_account(local_user, fake_request, authorization=None, db=db)
+
+        client_id = "822220189205-test.apps.googleusercontent.com"
+        os.environ["GOOGLE_CLIENT_ID"] = client_id
+
+        mock_payload = {
+            "iss": "https://accounts.google.com",
+            "aud": client_id,
+            "sub": "unauthorized_google_sub_999",
+            "email": "target@example.com",
+            "email_verified": True,
+            "name": "Attacker Trying Takeover"
+        }
+
+        with patch("app.auth.id_token.verify_oauth2_token", return_value=mock_payload):
+            req = GoogleAuthRequest(credential="unauthorized.takeover.token")
+            # Without being authenticated as target user, unauthenticated Google login matching this email must fail with 409
+            with pytest.raises(HTTPException) as exc_takeover:
+                google_token_login(req, fake_request, authorization=None, db=db)
+            assert exc_takeover.value.status_code == 409
+            assert "already exists with password" in exc_takeover.value.detail.lower()
 
     finally:
         db.close()
