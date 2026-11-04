@@ -124,11 +124,18 @@ def test_forgot_and_reset_password_flow(fake_request):
         )
         register_account(reg_req, fake_request, authorization=None, db=db)
 
-        # Request reset token
-        forgot_res = forgot_password(ForgotPasswordRequest(email="alex@example.com"), fake_request, db=db)
-        assert forgot_res["success"] is True
-        reset_token = forgot_res["reset_token"]
-        assert reset_token is not None
+        # Request reset token - verify reset_token is NEVER exposed in the public API response
+        with patch("app.auth.deliver_password_reset_token") as mock_deliver:
+            forgot_res = forgot_password(ForgotPasswordRequest(email="alex@example.com"), fake_request, db=db)
+            assert forgot_res["success"] is True
+            # SECURITY INVARIANT: reset_token must NEVER be returned in the response body
+            assert "reset_token" not in forgot_res or forgot_res.get("reset_token") is None
+            assert mock_deliver.called
+            delivered_email, delivered_token = mock_deliver.call_args[0]
+            assert delivered_email == "alex@example.com"
+            assert delivered_token is not None
+            assert len(delivered_token) > 20
+            reset_token = delivered_token
 
         # Reset password
         reset_res = reset_password(

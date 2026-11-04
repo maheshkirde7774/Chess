@@ -31,6 +31,7 @@ from app.db import (
     get_utc_now,
 )
 from app.profiles import profile_from_authorization
+from app.ws_manager import manager
 
 logger = logging.getLogger("fourx_social")
 router = APIRouter()
@@ -1229,25 +1230,35 @@ def mark_notifications_read(
 
 @router.websocket("/ws/social")
 async def social_websocket(websocket: WebSocket, db: Session = Depends(get_db)):
-    await websocket.accept()
-    profile: Optional[PlayerProfileModel] = None
-    try:
-        raw_auth = await asyncio.wait_for(websocket.receive_text(), timeout=5)
-        if len(raw_auth) > 2048:
-            raise ValueError("Authentication frame is too large")
-        auth_payload = json.loads(raw_auth)
-        if not isinstance(auth_payload, dict) or auth_payload.get("type") != "AUTH":
-            raise ValueError("Authentication frame is required")
-        token = auth_payload.get("token")
-        if not isinstance(token, str) or not token or len(token) > 160:
-            raise ValueError("Invalid profile credential")
-        profile = profile_from_authorization(f"Bearer {token}", db)
-        if profile is None:
-            raise ValueError("Invalid profile credential")
-    except (asyncio.TimeoutError, json.JSONDecodeError, ValueError, WebSocketDisconnect):
-        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+    client_ip = websocket.client.host if websocket.client else "unknown"
+    if not manager.can_accept_ip(client_ip):
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Connection limit exceeded")
         return
 
+    manager.track_pending(client_ip)
+    profile: Optional[PlayerProfileModel] = None
+    try:
+        await websocket.accept()
+        try:
+            raw_auth = await asyncio.wait_for(websocket.receive_text(), timeout=4)
+            if len(raw_auth) > 2048:
+                raise ValueError("Authentication frame is too large")
+            auth_payload = json.loads(raw_auth)
+            if not isinstance(auth_payload, dict) or auth_payload.get("type") != "AUTH":
+                raise ValueError("Authentication frame is required")
+            token = auth_payload.get("token")
+            if not isinstance(token, str) or not token or len(token) > 160:
+                raise ValueError("Invalid profile credential")
+            profile = profile_from_authorization(f"Bearer {token}", db)
+            if profile is None:
+                raise ValueError("Invalid profile credential")
+        except (asyncio.TimeoutError, json.JSONDecodeError, ValueError, WebSocketDisconnect):
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+            return
+    finally:
+        manager.release_pending(client_ip)
+
+    manager.track_active(client_ip)
     await presence_hub.connect(profile.id, websocket, db)
     await websocket.send_json({
         "type": "SOCIAL_READY",
@@ -1296,4 +1307,5 @@ async def social_websocket(websocket: WebSocket, db: Session = Depends(get_db)):
     except WebSocketDisconnect:
         pass
     finally:
+        manager.release_active(client_ip)
         await presence_hub.disconnect(profile.id, websocket, db)

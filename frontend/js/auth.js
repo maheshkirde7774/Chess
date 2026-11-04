@@ -477,13 +477,13 @@ class FOURXAuth {
             const step2 = document.getElementById("forgot-step-2");
             if (step2) {
                 step2.classList.remove("hidden");
-                // Pre-fill reset token if returned directly by backend (dev/test environment)
-                if (data.reset_token) {
-                    const tokenInput = document.getElementById("reset-token-input");
-                    if (tokenInput) tokenInput.value = data.reset_token;
+                const tokenInput = document.getElementById("reset-token-input");
+                if (tokenInput) {
+                    tokenInput.value = "";
+                    tokenInput.focus();
                 }
             }
-            this.showAlert("Reset instructions generated. Enter your code and new password below.", "success");
+            this.showAlert("Password reset instructions have been sent to your email. Enter the verification code and your new password below.", "success");
         } catch (err) {
             this.showAlert(err.message || "Failed to request password reset.");
         } finally {

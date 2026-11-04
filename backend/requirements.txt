@@ -8,3 +8,6 @@ httpx>=0.28.0
 pytest>=8.0.0
 chess>=1.11.0
 cryptography>=41.0.0
+google-auth>=2.20.0
+requests>=2.28.0
+python-dotenv>=1.0.0

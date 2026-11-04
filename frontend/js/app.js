@@ -1196,7 +1196,16 @@ class QuadChessApp {
         const toast = document.createElement("div");
         toast.className = "chat-bubble-toast";
         toast.style.borderColor = info.color;
-        toast.innerHTML = `<strong style="color:${info.color}">${sender}:</strong> ${text}`;
+
+        const strong = document.createElement("strong");
+        strong.style.color = info.color;
+        strong.textContent = `${sender}: `;
+
+        const messageSpan = document.createElement("span");
+        messageSpan.textContent = text;
+
+        toast.appendChild(strong);
+        toast.appendChild(messageSpan);
 
         const container = document.getElementById("toast-container");
         if (container) {
@@ -1250,15 +1259,31 @@ class QuadChessApp {
             return;
         }
 
-        container.innerHTML = history.slice(0, 5).map(m => `
-            <div class="match-item">
-                <div class="match-col">
-                    <strong>Room #${m.room_code || 'LOCAL'}</strong>
-                    <small>${m.total_moves} Moves · ${new Date(m.completed_at || Date.now()).toLocaleDateString()}</small>
-                </div>
-                <div class="match-result victory">${m.winner_name || 'Completed'}</div>
-            </div>
-        `).join("");
+        container.replaceChildren();
+        history.slice(0, 5).forEach(m => {
+            const item = document.createElement("div");
+            item.className = "match-item";
+
+            const col = document.createElement("div");
+            col.className = "match-col";
+
+            const title = document.createElement("strong");
+            title.textContent = `Room #${m.room_code || 'LOCAL'}`;
+
+            const small = document.createElement("small");
+            small.textContent = `${m.total_moves} Moves · ${new Date(m.completed_at || Date.now()).toLocaleDateString()}`;
+
+            col.appendChild(title);
+            col.appendChild(small);
+
+            const result = document.createElement("div");
+            result.className = "match-result victory";
+            result.textContent = m.winner_name || 'Completed';
+
+            item.appendChild(col);
+            item.appendChild(result);
+            container.appendChild(item);
+        });
     }
 
     initPuzzlesList() {

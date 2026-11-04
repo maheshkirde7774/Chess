@@ -10,6 +10,9 @@ android {
         versionCode 1
         versionName "1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        manifestPlaceholders = [
+            admobAppId: System.getenv("ADMOB_APP_ID") ?: project.findProperty("ADMOB_APP_ID") ?: "ca-app-pub-3940256099942544~3347511713"
+        ]
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
              // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
@@ -18,8 +21,25 @@ android {
     }
     buildTypes {
         release {
-            minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            minifyEnabled true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    applicationVariants.all { variant ->
+        if (variant.buildType.name == 'release') {
+            def appId = variant.mergedFlavor.manifestPlaceholders.admobAppId
+            def allowTestInRelease = (System.getenv("ALLOW_TEST_ADMOB_IN_RELEASE") ?: project.findProperty("ALLOW_TEST_ADMOB_IN_RELEASE") ?: "false").toBoolean()
+            if ((!appId || appId == "ca-app-pub-3940256099942544~3347511713") && !allowTestInRelease) {
+                tasks.matching { it.name.startsWith("assembleRelease") || it.name.startsWith("bundleRelease") }.configureEach {
+                    doFirst {
+                        throw new GradleException(
+                            "CRITICAL SECURITY CONFIGURATION: Release build attempted with Google sample test AdMob App ID. " +
+                            "You must configure a valid production ADMOB_APP_ID environment variable or project property before building for release."
+                        )
+                    }
+                }
+            }
         }
     }
 }

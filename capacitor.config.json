@@ -3,10 +3,10 @@
   "appName": "FOURX",
   "webDir": "frontend",
   "server": {
-    "cleartext": true,
+    "cleartext": false,
     "androidScheme": "https"
   },
   "android": {
-    "allowMixedContent": true
+    "allowMixedContent": false
   }
 }

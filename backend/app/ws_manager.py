@@ -19,6 +19,47 @@ class ConnectionManager:
         self.max_spectators_per_room = 100
         self.max_spectators_total = 500
         self.max_spectators_per_ip = 20
+        self.max_total_connections_per_ip = 25
+        self.max_pending_handshakes_per_ip = 5
+        self._ip_active_counts: Dict[str, int] = {}
+        self._ip_pending_counts: Dict[str, int] = {}
+
+    def can_accept_ip(self, ip_address: Optional[str]) -> bool:
+        """Checks whether the client IP is allowed to initiate a new WebSocket handshake."""
+        ip = ip_address or "unknown"
+        if ip in ("127.0.0.1", "localhost", "testclient"):
+            return True
+        active = self._ip_active_counts.get(ip, 0)
+        pending = self._ip_pending_counts.get(ip, 0)
+        if active >= self.max_total_connections_per_ip:
+            logger.warning("Rejecting WebSocket from %s: max concurrent connections (%s) reached", ip, active)
+            return False
+        if pending >= self.max_pending_handshakes_per_ip:
+            logger.warning("Rejecting WebSocket from %s: pending handshake limit (%s) reached", ip, pending)
+            return False
+        return True
+
+    def track_pending(self, ip_address: Optional[str]) -> None:
+        ip = ip_address or "unknown"
+        self._ip_pending_counts[ip] = self._ip_pending_counts.get(ip, 0) + 1
+
+    def release_pending(self, ip_address: Optional[str]) -> None:
+        ip = ip_address or "unknown"
+        if ip in self._ip_pending_counts:
+            self._ip_pending_counts[ip] = max(0, self._ip_pending_counts[ip] - 1)
+            if self._ip_pending_counts[ip] == 0:
+                del self._ip_pending_counts[ip]
+
+    def track_active(self, ip_address: Optional[str]) -> None:
+        ip = ip_address or "unknown"
+        self._ip_active_counts[ip] = self._ip_active_counts.get(ip, 0) + 1
+
+    def release_active(self, ip_address: Optional[str]) -> None:
+        ip = ip_address or "unknown"
+        if ip in self._ip_active_counts:
+            self._ip_active_counts[ip] = max(0, self._ip_active_counts[ip] - 1)
+            if self._ip_active_counts[ip] == 0:
+                del self._ip_active_counts[ip]
 
     async def connect(self, room_code: str, player_id: str, websocket: WebSocket, accepted: bool = False):
         if not accepted:

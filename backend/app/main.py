@@ -212,6 +212,71 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+def apply_security_headers(response: Any) -> Any:
+    """Applies essential HTTP security headers and Content Security Policy to responses."""
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+
+    csp_directives = [
+        "default-src 'self'",
+        "script-src 'self' 'unsafe-inline' https://accounts.google.com",
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+        "font-src 'self' https://fonts.gstatic.com data:",
+        "img-src 'self' data: blob: https://*.googleusercontent.com",
+        "connect-src 'self' ws: wss: https://accounts.google.com",
+        "frame-src 'self' https://accounts.google.com",
+        "object-src 'none'",
+        "base-uri 'self'",
+    ]
+    response.headers["Content-Security-Policy"] = "; ".join(csp_directives)
+    return response
+
+
+class SecurityHeadersMiddleware:
+    """Pure ASGI middleware that attaches security headers without BaseHTTPMiddleware buffering."""
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        async def send_wrapper(message):
+            if message["type"] == "http.response.start":
+                headers = list(message.get("headers", []))
+                headers.append((b"x-content-type-options", b"nosniff"))
+                headers.append((b"x-frame-options", b"SAMEORIGIN"))
+                headers.append((b"x-xss-protection", b"1; mode=block"))
+                headers.append((b"referrer-policy", b"strict-origin-when-cross-origin"))
+                is_prod = (
+                    os.getenv("FOURX_ENV", "").lower() == "production"
+                    or os.getenv("ENVIRONMENT", "").lower() == "production"
+                )
+                ws_directive = b"connect-src 'self' wss: https://accounts.google.com; " if is_prod else b"connect-src 'self' ws: wss: https://accounts.google.com; "
+                csp = (
+                    b"default-src 'self'; "
+                    b"script-src 'self' 'unsafe-inline' https://accounts.google.com; "
+                    b"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+                    b"font-src 'self' https://fonts.gstatic.com data:; "
+                    b"img-src 'self' data: blob: https://*.googleusercontent.com; "
+                    + ws_directive +
+                    b"frame-src 'self' https://accounts.google.com; "
+                    b"object-src 'none'; "
+                    b"base-uri 'self'"
+                )
+                headers.append((b"content-security-policy", csp))
+                message["headers"] = headers
+            await send(message)
+
+        await self.app(scope, receive, send_wrapper)
+
+
+app.add_middleware(SecurityHeadersMiddleware)
+
 app.include_router(classic_router)
 app.include_router(profile_router)
 app.include_router(social_router)
@@ -860,6 +925,11 @@ async def websocket_endpoint(
     room_code: str,
     db: Session = Depends(get_db)
 ):
+    client_ip = websocket.client.host if websocket.client else "unknown"
+    if not manager.can_accept_ip(client_ip):
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Connection limit exceeded")
+        return
+
     room_code = room_code.strip().upper()
     room_data = get_or_create_room_runtime(db, room_code)
 
@@ -867,21 +937,26 @@ async def websocket_endpoint(
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
 
-    await websocket.accept()
+    manager.track_pending(client_ip)
     try:
-        auth_message = await asyncio.wait_for(websocket.receive_text(), timeout=5)
-        if len(auth_message) > 4096:
-            raise ValueError("Authentication message is too large")
-        auth_payload = json.loads(auth_message)
-    except (asyncio.TimeoutError, json.JSONDecodeError, ValueError, WebSocketDisconnect):
-        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
-        return
-    player_id = auth_payload.get("player_id") if isinstance(auth_payload, dict) and auth_payload.get("type") == "AUTH" else None
-    role = _get_role_by_player_id(room_data["players"], player_id)
-    if role is None or not isinstance(player_id, str):
-        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
-        return
+        await websocket.accept()
+        try:
+            auth_message = await asyncio.wait_for(websocket.receive_text(), timeout=4)
+            if len(auth_message) > 4096:
+                raise ValueError("Authentication message is too large")
+            auth_payload = json.loads(auth_message)
+        except (asyncio.TimeoutError, json.JSONDecodeError, ValueError, WebSocketDisconnect):
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+            return
+        player_id = auth_payload.get("player_id") if isinstance(auth_payload, dict) and auth_payload.get("type") == "AUTH" else None
+        role = _get_role_by_player_id(room_data["players"], player_id)
+        if role is None or not isinstance(player_id, str):
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+            return
+    finally:
+        manager.release_pending(client_ip)
 
+    manager.track_active(client_ip)
     # Connect to room manager
     client_key = player_id
     await manager.connect(room_code, client_key, websocket, accepted=True)
@@ -1058,19 +1133,21 @@ async def websocket_endpoint(
                 })
 
     except WebSocketDisconnect:
+        pass
+    finally:
+        manager.release_active(client_ip)
         manager.disconnect(room_code, client_key, websocket)
-        if manager.is_player_connected(room_code, client_key):
-            return
-        await presence_hub.mark_game(profile_id, room_code, False, db)
-        if role in room_data["players"]:
-            room_data["players"][role]["connected"] = False
-            persist_room_state(db, room_code)
-            await manager.broadcast_to_room(room_code, {
-                "type": "PRESENCE_UPDATE",
-                "role": role,
-                "connected": False,
-                "players": _sanitize_players(room_data["players"])
-            })
+        if not manager.is_player_connected(room_code, client_key):
+            await presence_hub.mark_game(profile_id, room_code, False, db)
+            if role in room_data["players"]:
+                room_data["players"][role]["connected"] = False
+                persist_room_state(db, room_code)
+                await manager.broadcast_to_room(room_code, {
+                    "type": "PRESENCE_UPDATE",
+                    "role": role,
+                    "connected": False,
+                    "players": _sanitize_players(room_data["players"])
+                })
 
 @app.websocket("/ws/spectate/{room_code}")
 async def four_player_spectator_websocket(
@@ -1078,47 +1155,58 @@ async def four_player_spectator_websocket(
     room_code: str,
     db: Session = Depends(get_db),
 ):
+    client_ip = websocket.client.host if websocket.client else "unknown"
+    if not manager.can_accept_ip(client_ip):
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Connection limit exceeded")
+        return
+
     code = room_code.strip().upper()
     room_data = get_or_create_room_runtime(db, code)
     if room_data is None or room_data["status"] != "PLAYING":
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
-    await websocket.accept()
+
+    manager.track_pending(client_ip)
     try:
-        raw_auth = await asyncio.wait_for(websocket.receive_text(), timeout=5)
-        if len(raw_auth) > 4096:
-            raise ValueError("Authentication message is too large")
-        auth = json.loads(raw_auth)
-    except (asyncio.TimeoutError, json.JSONDecodeError, ValueError, WebSocketDisconnect):
-        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
-        return
-    if not isinstance(auth, dict) or auth.get("type") not in {"AUTH", "SPECTATE"}:
-        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
-        return
-    try:
-        premium_profile = validate_spectator_ticket(auth.get("premium_ticket"), db)
-    except HTTPException:
-        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
-        return
-    if _settings(room_data)["is_private"]:
-        token = auth.get("access_token")
-        spectator_token = room_data.get("spectator_token")
-        authorized = (
-            isinstance(token, str)
-            and isinstance(spectator_token, str)
-            and secrets.compare_digest(token, spectator_token)
-        )
-        if not authorized:
+        await websocket.accept()
+        try:
+            raw_auth = await asyncio.wait_for(websocket.receive_text(), timeout=4)
+            if len(raw_auth) > 4096:
+                raise ValueError("Authentication message is too large")
+            auth = json.loads(raw_auth)
+        except (asyncio.TimeoutError, json.JSONDecodeError, ValueError, WebSocketDisconnect):
             await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
             return
+        if not isinstance(auth, dict) or auth.get("type") not in {"AUTH", "SPECTATE"}:
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+            return
+        try:
+            premium_profile = validate_spectator_ticket(auth.get("premium_ticket"), db)
+        except HTTPException:
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+            return
+        if _settings(room_data)["is_private"]:
+            token = auth.get("access_token")
+            spectator_token = room_data.get("spectator_token")
+            authorized = (
+                isinstance(token, str)
+                and isinstance(spectator_token, str)
+                and secrets.compare_digest(token, spectator_token)
+            )
+            if not authorized:
+                await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+                return
+    finally:
+        manager.release_pending(client_ip)
 
-    client_ip = websocket.client.host if websocket.client else "unknown"
     spectator_id = str(uuid.uuid4())
     try:
         await manager.connect_spectator(code, spectator_id, websocket, client_ip, accepted=True)
     except ValueError:
         await websocket.close(code=status.WS_1013_TRY_AGAIN_LATER)
         return
+
+    manager.track_active(client_ip)
 
     started_at = room_data.get("started_at")
     sync = {
@@ -1196,6 +1284,7 @@ async def four_player_spectator_websocket(
     except RuntimeError as error:
         logger.info("Spectator socket for room %s disconnected during send: %s", code, error)
     finally:
+        manager.release_active(client_ip)
         manager.disconnect_spectator(code, spectator_id, websocket)
         await manager.broadcast_to_room(code, {
             "type": "SPECTATOR_COUNT",

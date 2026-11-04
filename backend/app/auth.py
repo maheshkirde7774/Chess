@@ -303,13 +303,85 @@ def logout_account(
     return {"success": True, "message": "Logged out successfully"}
 
 
+def deliver_password_reset_token(email: str, reset_token: str) -> bool:
+    """Delivers password reset instructions via secure SMTP email or secure server logs in development."""
+    smtp_host = os.getenv("SMTP_HOST")
+    if smtp_host:
+        try:
+            import smtplib
+            import ssl
+            from email.mime.multipart import MIMEMultipart
+            from email.mime.text import MIMEText
+
+            smtp_port = int(os.getenv("SMTP_PORT", "587"))
+            smtp_user = os.getenv("SMTP_USER", "")
+            smtp_pass = os.getenv("SMTP_PASSWORD", "")
+            smtp_from = os.getenv("SMTP_FROM", "noreply@fourxchess.com")
+            use_tls = os.getenv("SMTP_USE_TLS", "true").lower() in ("true", "1", "yes")
+
+            msg = MIMEMultipart("alternative")
+            msg["Subject"] = "FOURX Chess - Password Reset Verification Code"
+            msg["From"] = smtp_from
+            msg["To"] = email
+
+            text_content = (
+                f"Hello Commander,\n\n"
+                f"You requested to reset your password for FOURX Chess.\n"
+                f"Your password reset verification code is:\n\n"
+                f"    {reset_token}\n\n"
+                f"This code will expire in 1 hour. If you did not request this reset, you can safely ignore this email.\n\n"
+                f"The FOURX Chess Team"
+            )
+            html_content = (
+                f"<div style='font-family:sans-serif;background:#0d0d12;color:#f0f0f5;padding:24px;border-radius:8px;max-width:500px;'>"
+                f"<h2 style='color:#ffd700;margin-top:0;'>FOURX Chess</h2>"
+                f"<p>You requested to reset your password. Use the verification code below to set your new password:</p>"
+                f"<div style='background:#1a1a24;border:1px solid #333348;border-radius:6px;padding:16px;text-align:center;margin:20px 0;'>"
+                f"<span style='font-size:22px;letter-spacing:2px;font-family:monospace;color:#00ffff;font-weight:bold;'>{reset_token}</span>"
+                f"</div>"
+                f"<p style='color:#a0a0b8;font-size:13px;'>This code will expire in 1 hour. If you did not request this, please ignore this email.</p>"
+                f"</div>"
+            )
+
+            msg.attach(MIMEText(text_content, "plain"))
+            msg.attach(MIMEText(html_content, "html"))
+
+            ssl_context = ssl.create_default_context()
+            if smtp_port == 465:
+                with smtplib.SMTP_SSL(smtp_host, smtp_port, context=ssl_context, timeout=10) as server:
+                    if smtp_user and smtp_pass:
+                        server.login(smtp_user, smtp_pass)
+                    server.sendmail(smtp_from, [email], msg.as_string())
+            else:
+                with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as server:
+                    if use_tls:
+                        server.starttls(context=ssl_context)
+                    if smtp_user and smtp_pass:
+                        server.login(smtp_user, smtp_pass)
+                    server.sendmail(smtp_from, [email], msg.as_string())
+
+            logger.info("Successfully sent password reset email to %s", email)
+            return True
+        except Exception as e:
+            logger.error("Failed to send password reset email to %s: %s", email, e)
+            return False
+    else:
+        is_prod = os.getenv("FOURX_ENV", "").lower() == "production" or os.getenv("ENVIRONMENT", "").lower() == "production"
+        if is_prod:
+            logger.error("SMTP_HOST is not configured in production. Password reset email cannot be dispatched.")
+            return False
+        # Development / test mode fallback: log only in non-production environments
+        logger.info("[AUTH DELIVERY DEV MODE] Password reset code for %s: %s", email, reset_token)
+        return True
+
+
 @router.post("/forgot-password")
 def forgot_password(
     req: ForgotPasswordRequest,
     http_request: Request,
     db: Session = Depends(get_db),
 ):
-    """Generates a secure password reset token for the account."""
+    """Generates a secure password reset token for the account and delivers it out-of-band."""
     enforce_room_rate_limit(http_request, "auth-forgot", limit=10)
     email_key = req.email.strip().lower()
 
@@ -318,18 +390,18 @@ def forgot_password(
         PlayerProfileModel.deleted_at.is_(None)
     ).first()
 
-    reset_token = None
-    if profile:
+    if profile and profile.email:
         reset_token = secrets.token_urlsafe(32)
         profile.password_reset_token_hash = _token_hash(reset_token)
         profile.password_reset_expires_at = datetime.now(timezone.utc) + timedelta(hours=1)
         db.commit()
-        logger.info("Generated password reset token for %s", profile.email)
+        deliver_password_reset_token(profile.email, reset_token)
+        logger.info("Dispatched password reset token delivery for %s", profile.email)
 
+    # Standard security practice: return constant message without disclosing user existence or token
     return {
         "success": True,
-        "message": "If an account with that email exists, password reset instructions have been generated.",
-        "reset_token": reset_token,
+        "message": "If an account with that email exists, password reset instructions have been sent to your email address.",
     }
 
 

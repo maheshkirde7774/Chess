@@ -683,44 +683,52 @@ async def classic_spectator_websocket(
     room_code: str,
     db: Session = Depends(get_db),
 ):
+    client_ip = websocket.client.host if websocket.client else "unknown"
+    if not manager.can_accept_ip(client_ip):
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Connection limit exceeded")
+        return
+
     code = room_code.strip().upper()
     room = _runtime(db, code)
     if room is None or room["mode"] != "online" or room["status"] != "PLAYING":
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
 
-    await websocket.accept()
+    manager.track_pending(client_ip)
     try:
-        auth_message = await asyncio.wait_for(websocket.receive_text(), timeout=5)
-        if len(auth_message) > 4096:
-            raise ValueError("Authentication message is too large")
-        auth = json.loads(auth_message)
-    except (asyncio.TimeoutError, json.JSONDecodeError, ValueError, WebSocketDisconnect):
-        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
-        return
-    if not isinstance(auth, dict) or auth.get("type") not in {"AUTH", "SPECTATE"}:
-        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
-        return
-    try:
-        premium_profile = validate_spectator_ticket(auth.get("premium_ticket"), db)
-    except HTTPException:
-        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
-        return
-    if room.get("is_private", True):
-        token = auth.get("access_token")
-        spectator_token = room.get("spectator_token")
-        authorized = (
-            isinstance(token, str)
-            and isinstance(spectator_token, str)
-            and secrets.compare_digest(token, spectator_token)
-        )
-        if not authorized:
+        await websocket.accept()
+        try:
+            auth_message = await asyncio.wait_for(websocket.receive_text(), timeout=4)
+            if len(auth_message) > 4096:
+                raise ValueError("Authentication message is too large")
+            auth = json.loads(auth_message)
+        except (asyncio.TimeoutError, json.JSONDecodeError, ValueError, WebSocketDisconnect):
             await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
             return
+        if not isinstance(auth, dict) or auth.get("type") not in {"AUTH", "SPECTATE"}:
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+            return
+        try:
+            premium_profile = validate_spectator_ticket(auth.get("premium_ticket"), db)
+        except HTTPException:
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+            return
+        if room.get("is_private", True):
+            token = auth.get("access_token")
+            spectator_token = room.get("spectator_token")
+            authorized = (
+                isinstance(token, str)
+                and isinstance(spectator_token, str)
+                and secrets.compare_digest(token, spectator_token)
+            )
+            if not authorized:
+                await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+                return
+    finally:
+        manager.release_pending(client_ip)
 
     manager_room = f"classic:{code}"
     spectator_id = str(uuid.uuid4())
-    client_ip = websocket.client.host if websocket.client else "unknown"
     try:
         await manager.connect_spectator(
             manager_room, spectator_id, websocket, client_ip, accepted=True
@@ -728,6 +736,8 @@ async def classic_spectator_websocket(
     except ValueError:
         await websocket.close(code=status.WS_1013_TRY_AGAIN_LATER)
         return
+
+    manager.track_active(client_ip)
 
     state = room["game"].snapshot()
     state.pop("legal_moves", None)
@@ -810,6 +820,7 @@ async def classic_spectator_websocket(
     except RuntimeError as error:
         logger.info("Classic spectator socket for room %s disconnected during send: %s", code, error)
     finally:
+        manager.release_active(client_ip)
         manager.disconnect_spectator(manager_room, spectator_id, websocket)
         await manager.broadcast_to_room(manager_room, {
             "type": "SPECTATOR_COUNT",
@@ -823,31 +834,41 @@ async def classic_websocket(
     room_code: str,
     db: Session = Depends(get_db),
 ):
+    client_ip = websocket.client.host if websocket.client else "unknown"
+    if not manager.can_accept_ip(client_ip):
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Connection limit exceeded")
+        return
+
     code = room_code.strip().upper()
     room = _runtime(db, code)
     if room is None:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
 
-    await websocket.accept()
+    manager.track_pending(client_ip)
     try:
-        auth_message = await asyncio.wait_for(websocket.receive_text(), timeout=5)
-        if len(auth_message) > 4096:
-            raise ValueError("Authentication message is too large")
-        auth_payload = json.loads(auth_message)
-    except (asyncio.TimeoutError, json.JSONDecodeError, ValueError, WebSocketDisconnect):
-        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
-        return
-    player_id = (
-        auth_payload.get("player_id")
-        if isinstance(auth_payload, dict) and auth_payload.get("type") == "AUTH"
-        else None
-    )
-    side = _player_side(room["players"], player_id or "")
-    if side is None or not isinstance(player_id, str):
-        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
-        return
+        await websocket.accept()
+        try:
+            auth_message = await asyncio.wait_for(websocket.receive_text(), timeout=4)
+            if len(auth_message) > 4096:
+                raise ValueError("Authentication message is too large")
+            auth_payload = json.loads(auth_message)
+        except (asyncio.TimeoutError, json.JSONDecodeError, ValueError, WebSocketDisconnect):
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+            return
+        player_id = (
+            auth_payload.get("player_id")
+            if isinstance(auth_payload, dict) and auth_payload.get("type") == "AUTH"
+            else None
+        )
+        side = _player_side(room["players"], player_id or "")
+        if side is None or not isinstance(player_id, str):
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+            return
+    finally:
+        manager.release_pending(client_ip)
 
+    manager.track_active(client_ip)
     manager_room = f"classic:{code}"
     await manager.connect(manager_room, player_id, websocket, accepted=True)
     profile_id = room["players"][side].get("profile_id")
@@ -1018,15 +1039,17 @@ async def classic_websocket(
                     "type": "ERROR", "message": str(error),
                 })
     except WebSocketDisconnect:
+        pass
+    finally:
+        manager.release_active(client_ip)
         manager.disconnect(manager_room, player_id, websocket)
-        if manager.is_player_connected(manager_room, player_id):
-            return
-        if profile_id:
-            from app.social import presence_hub
-            await presence_hub.mark_game(profile_id, code, False, db)
-        if side in room["players"]:
-            room["players"][side]["connected"] = False
-            _persist(db, code, room)
-            await manager.broadcast_to_room(manager_room, {
-                "type": "PRESENCE_UPDATE", **_public_state(code, room),
-            })
+        if not manager.is_player_connected(manager_room, player_id):
+            if profile_id:
+                from app.social import presence_hub
+                await presence_hub.mark_game(profile_id, code, False, db)
+            if side in room["players"]:
+                room["players"][side]["connected"] = False
+                _persist(db, code, room)
+                await manager.broadcast_to_room(manager_room, {
+                    "type": "PRESENCE_UPDATE", **_public_state(code, room),
+                })

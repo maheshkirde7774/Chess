@@ -79,7 +79,7 @@ describe("Frontend SPA Navigation & Architecture Tests", () => {
         assert.equal(capConfig.appId, "com.neonchess.fourplayer");
         assert.equal(capConfig.appName, "FOURX");
         assert.equal(capConfig.webDir, "frontend");
-        assert.equal(capConfig.server.cleartext, true);
+        assert.equal(capConfig.server.cleartext, false);
     });
 
     test("Black + Gold primary theme tokens are declared in neon-theme.css", () => {

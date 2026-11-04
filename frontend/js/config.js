@@ -28,7 +28,8 @@ const CONFIG = {
         if (!url) return;
         let clean = url.trim().replace(/\/+$/, "");
         if (!clean.startsWith("http://") && !clean.startsWith("https://")) {
-            clean = "http://" + clean;
+            const isLocal = clean.startsWith("localhost") || clean.startsWith("127.0.0.1") || clean.startsWith("10.0.2.2");
+            clean = (isLocal ? "http://" : "https://") + clean;
         }
         localStorage.setItem("neon_chess_backend_url", clean);
     },

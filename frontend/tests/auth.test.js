@@ -131,4 +131,38 @@ describe("FOURX Authentication System Frontend Tests", () => {
         assert.ok(authJsSrc.includes("handleGoogleCredentialResponse"), "auth.js must implement handleGoogleCredentialResponse");
         assert.ok(authJsSrc.includes("disableAutoSelect"), "auth.js must call disableAutoSelect on logout");
     });
+
+    test("10. Content Security Policy Meta Tag Exists in index.html", () => {
+        assert.ok(htmlSrc.includes('http-equiv="Content-Security-Policy"'), "CSP meta tag must be declared in index.html");
+        assert.ok(htmlSrc.includes("https://accounts.google.com"), "CSP must permit Google Identity Services");
+        assert.ok(htmlSrc.includes("connect-src"), "CSP must define connect-src directives");
+    });
+
+    test("11. Chat and Match History DOM Rendering Uses Safe textContent", () => {
+        const appJsSrc = fs.readFileSync(path.join(__dirname, "../js/app.js"), "utf-8");
+        // Verify displayChatMessage does not assign to innerHTML
+        const chatFuncMatch = appJsSrc.match(/displayChatMessage\s*\([^)]*\)\s*\{([\s\S]*?)\n\s*\}/);
+        assert.ok(chatFuncMatch, "displayChatMessage function must exist in app.js");
+        assert.ok(!chatFuncMatch[1].includes("innerHTML"), "displayChatMessage must never assign to innerHTML");
+        assert.ok(chatFuncMatch[1].includes("textContent"), "displayChatMessage must use textContent to avoid XSS");
+    });
+
+    test("12. Password Reset Flow Does Not Leak or Expect Public Token in Client", () => {
+        assert.ok(!authJsSrc.includes("data.reset_token"), "auth.js must not read or rely on data.reset_token in public response");
+        assert.ok(authJsSrc.includes("Password reset instructions have been sent to your email"), "auth.js must inform user of email delivery");
+    });
+
+    test("13. Android Capacitor Config Disallows Cleartext and Mixed Content", () => {
+        const capConfig = JSON.parse(fs.readFileSync(path.join(__dirname, "../../capacitor.config.json"), "utf-8"));
+        assert.equal(capConfig.server.cleartext, false, "cleartext must be disabled in capacitor.config.json");
+        assert.equal(capConfig.android.allowMixedContent, false, "allowMixedContent must be disabled in capacitor.config.json");
+    });
+
+    test("14. Android Manifest Configures Network Security and Disables Cleartext Traffic", () => {
+        const manifestSrc = fs.readFileSync(path.join(__dirname, "../../android/app/src/main/AndroidManifest.xml"), "utf-8");
+        assert.ok(manifestSrc.includes('android:usesCleartextTraffic="false"'), "usesCleartextTraffic must be false in AndroidManifest.xml");
+        assert.ok(manifestSrc.includes('android:networkSecurityConfig="@xml/network_security_config"'), "networkSecurityConfig must be set in AndroidManifest.xml");
+        const netSecXml = fs.readFileSync(path.join(__dirname, "../../android/app/src/main/res/xml/network_security_config.xml"), "utf-8");
+        assert.ok(netSecXml.includes('cleartextTrafficPermitted="false"'), "network_security_config must disable cleartext by default");
+    });
 });
