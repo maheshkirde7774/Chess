@@ -41,11 +41,12 @@ class QuadChessApp {
         this.initLeaderboardData();
         this.restoreFourPlayerSession();
         const urlParams = new URLSearchParams(window.location.search);
-        if (urlParams.get("preview_mobile") === "1" || urlParams.get("mobile") === "1") {
+        const previewW = urlParams.get("preview_w") || ((urlParams.get("preview_mobile") === "1" || urlParams.get("mobile") === "1") ? "390" : null);
+        if (previewW) {
             const root = document.getElementById("app-root");
             if (root) {
-                root.style.maxWidth = "390px";
-                root.style.width = "390px";
+                root.style.maxWidth = `${previewW}px`;
+                root.style.width = `${previewW}px`;
                 root.style.margin = "0";
             }
         }

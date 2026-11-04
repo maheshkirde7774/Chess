@@ -31,11 +31,12 @@ html, body {
     flex-direction: column;
     height: 100%;
     width: 100%;
-    max-width: 1080px;
+    max-width: 100%;
     margin: 0 auto;
     position: relative;
-    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left);
     background: var(--bg-app);
+    overflow: hidden;
 }
 
 /* Scrollbars */
@@ -60,11 +61,13 @@ html, body {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 10px 16px;
+    padding: 8px clamp(10px, 2.5vw, 24px);
     background: var(--bg-surface);
     border-bottom: 1px solid var(--border-subtle);
     z-index: 100;
-    min-height: 56px;
+    min-height: 50px;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .header-left, .header-right {
@@ -1976,10 +1979,15 @@ html, body {
     border-radius: var(--radius-md);
 }
 .lb-current-player span { color: var(--color-text-secondary); font-size: .8rem; }
-.leaderboard-table-card { overflow-x: auto; }
+.leaderboard-table-card {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    width: 100%;
+    border-radius: var(--radius-md);
+}
 .lb-header-row, .lb-row {
-    min-width: 550px;
-    grid-template-columns: 48px minmax(120px, 1fr) 68px 54px 54px 66px;
+    min-width: 480px;
+    grid-template-columns: 44px minmax(110px, 1fr) 60px 48px 48px 58px;
 }
 .lb-profile-link {
     padding: 0;
@@ -2079,7 +2087,7 @@ html, body {
 }
 .stats-overview-grid {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(75px, 1fr));
     gap: 8px;
 }
 .stat-card {
@@ -2278,11 +2286,15 @@ html, body {
     display: flex;
     flex-direction: column;
     align-items: center;
+    justify-content: center;
     gap: 3px;
     cursor: pointer;
-    padding: 4px 10px;
+    padding: 4px 6px;
     border-radius: var(--radius-md);
     transition: var(--transition-fast);
+    flex: 1;
+    min-width: 0;
+    touch-action: manipulation;
 }
 
 .nav-tab-btn:hover {
@@ -3621,7 +3633,7 @@ button:focus-visible {
 }
 .customization-heading h2 { margin: 4px 0; font-size: clamp(1.5rem, 3vw, 2rem); }
 .customization-heading p { margin: 0; color: var(--color-text-secondary); }
-.customization-eyebrow { color: #43d8e8; font: 700 0.68rem var(--font-mono); letter-spacing: 0.15em; }
+.customization-eyebrow { color: var(--color-gold); font: 700 0.68rem var(--font-mono); letter-spacing: 0.15em; }
 .customization-heading-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .customization-layout { display: grid; grid-template-columns: minmax(250px, 0.82fr) minmax(0, 1.65fr); gap: 16px; align-items: start; }
 .customization-preview-card,
@@ -4630,4 +4642,246 @@ button:focus-visible {
     .spectator-actions { width: 100%; }
     .spectator-actions button { flex: 1; justify-content: center; }
     .spectator-board-wrap { width: min(100%, 68vh); }
+}
+
+
+/* ==================== FOURX MASTER RESPONSIVE BREAKPOINTS ==================== */
+
+/* Large Desktop (>= 1440px) */
+@media (min-width: 1440px) {
+    .home-scrollable,
+    .live-games-page,
+    .dashboard-scrollable {
+        max-width: 1200px;
+    }
+}
+
+/* Tablet Landscape / Standard Laptop (1024px to 1366px) */
+@media (min-width: 1024px) and (max-width: 1366px) {
+    .classic-page {
+        padding: 8px 16px;
+    }
+}
+
+/* Tablet Portrait (768px to 1023px) */
+@media (min-width: 768px) and (max-width: 1023px) {
+    .home-scrollable {
+        padding: 16px 20px;
+        padding-bottom: 88px;
+    }
+    .main-menu-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+    }
+    .daily-puzzle-layout {
+        grid-template-columns: 1fr;
+        gap: 16px;
+    }
+    .social-chat-layout {
+        grid-template-columns: 240px 1fr;
+    }
+}
+
+/* Standard Mobile (<= 767px) */
+@media (max-width: 767px) {
+    #game-header {
+        padding: 6px 12px;
+        min-height: 48px;
+    }
+    .brand-wordmark {
+        width: clamp(125px, 34vw, 160px);
+    }
+    .header-right {
+        gap: 4px;
+    }
+    .header-right .icon-btn {
+        width: 32px;
+        height: 32px;
+        padding: 5px;
+    }
+    .home-scrollable {
+        padding: 10px 12px;
+        padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+        gap: 12px;
+    }
+    .home-hero-card {
+        padding: 16px 18px;
+        border-radius: var(--radius-lg);
+    }
+    .hero-content-wrapper {
+        gap: 16px;
+    }
+    .pedestal-stage {
+        width: 82px;
+        height: 82px;
+    }
+    .hero-app-title {
+        font-size: 1.35rem;
+    }
+    .hero-app-tagline {
+        font-size: 0.82rem;
+    }
+    .main-menu-grid {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+    .menu-card {
+        padding: 12px 14px;
+        min-height: 68px;
+        gap: 12px;
+    }
+    .menu-card-title {
+        font-size: 0.95rem;
+    }
+    .menu-card-desc {
+        font-size: 0.74rem;
+    }
+    .daily-puzzle-stats {
+        grid-template-columns: repeat(3, 1fr);
+    }
+    .stats-overview-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    .army-mastery-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    .social-chat-layout {
+        grid-template-columns: 1fr;
+    }
+    .social-chat-list {
+        max-height: 160px;
+    }
+    .modal-card {
+        max-width: 94vw;
+        border-radius: var(--radius-lg);
+    }
+    .modal-body {
+        padding: 16px 14px;
+    }
+    .modal-header {
+        padding: 14px 16px;
+    }
+    .neon-btn {
+        min-height: 42px;
+    }
+}
+
+/* Small Mobile (<= 390px, e.g. iPhone 12/13/14 mini, 360px Android) */
+@media (max-width: 390px) {
+    #game-header {
+        padding: 4px 8px;
+        min-height: 44px;
+    }
+    .brand-wordmark {
+        width: 115px;
+    }
+    .header-right {
+        gap: 3px;
+    }
+    .header-right .icon-btn {
+        width: 28px;
+        height: 28px;
+        padding: 4px;
+    }
+    .home-scrollable {
+        padding: 8px 10px;
+        padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+        gap: 10px;
+    }
+    .home-hero-card {
+        padding: 12px 14px;
+    }
+    .hero-content-wrapper {
+        gap: 10px;
+    }
+    .pedestal-stage {
+        width: 64px;
+        height: 64px;
+    }
+    .hero-app-title {
+        font-size: 1.18rem;
+    }
+    .hero-app-tagline {
+        font-size: 0.76rem;
+    }
+    .hero-arena-tags {
+        gap: 4px;
+    }
+    .hero-tag {
+        font-size: 0.62rem;
+        padding: 2px 6px;
+    }
+    .menu-card {
+        padding: 10px 12px;
+        min-height: 62px;
+        gap: 10px;
+    }
+    .menu-card-title {
+        font-size: 0.88rem;
+    }
+    .menu-card-desc {
+        font-size: 0.7rem;
+    }
+    .nav-label {
+        font-size: 0.62rem;
+    }
+    .nav-tab-btn {
+        padding: 3px 2px;
+    }
+    .nav-icon svg {
+        width: 18px;
+        height: 18px;
+    }
+}
+
+/* Ultra-Compact Phones (<= 360px, e.g. Galaxy S8/S9, Fold outer display) */
+@media (max-width: 360px) {
+    .pedestal-stage {
+        display: none; /* Give 100% width to typography on ultra-narrow 360px screens */
+    }
+    .hero-app-title {
+        font-size: 1.12rem;
+    }
+    .hero-titles {
+        gap: 4px;
+    }
+    .brand-wordmark {
+        width: 105px;
+    }
+}
+
+/* Landscape Mobile Orientation (max-height <= 500px) */
+@media (max-height: 500px) and (orientation: landscape) {
+    #game-header {
+        min-height: 40px;
+        padding: 3px 12px;
+    }
+    .brand-wordmark {
+        width: 110px;
+    }
+    #bottom-nav-bar {
+        min-height: 42px;
+        padding: 2px 12px;
+    }
+    .nav-label {
+        display: none;
+    }
+    .home-scrollable {
+        padding: 8px 16px;
+        padding-bottom: 50px;
+    }
+    .home-hero-card {
+        padding: 10px 14px;
+    }
+    .pedestal-stage {
+        width: 54px;
+        height: 54px;
+    }
+    .modal-card {
+        max-height: 94dvh;
+    }
+    .modal-body {
+        padding: 10px 14px;
+        gap: 8px;
+    }
 }
