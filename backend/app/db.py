@@ -86,6 +86,29 @@ class PlayerProfileModel(Base):
     deleted_at = Column(DateTime, nullable=True)
     timezone = Column(String(64), nullable=True)
     customization_json = Column(Text, nullable=False, default="{}")
+    full_name = Column(String(100), nullable=True)
+    email = Column(String(254), nullable=True, index=True)
+    email_key = Column(String(254), nullable=True, unique=True, index=True)
+    password_hash = Column(String(255), nullable=True)
+    auth_provider = Column(String(32), nullable=False, default="device")
+    google_sub = Column(String(128), nullable=True, unique=True, index=True)
+    facebook_id = Column(String(128), nullable=True, unique=True, index=True)
+    password_reset_token_hash = Column(String(64), nullable=True, index=True)
+    password_reset_expires_at = Column(DateTime, nullable=True)
+    last_login_at = Column(DateTime, nullable=True)
+
+
+class ActiveSessionModel(Base):
+    __tablename__ = "active_sessions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    profile_id = Column(String(36), nullable=False, index=True)
+    token_hash = Column(String(64), unique=True, index=True, nullable=False)
+    created_at = Column(DateTime, default=get_utc_now, nullable=False)
+    last_used_at = Column(DateTime, default=get_utc_now, nullable=False)
+    ip_address = Column(String(45), nullable=True)
+    user_agent = Column(String(255), nullable=True)
+    is_revoked = Column(Boolean, default=False, nullable=False)
 
 
 class SubscriptionModel(Base):
@@ -416,6 +439,22 @@ def init_db():
             connection.execute(text(
                 "ALTER TABLE player_profiles ADD COLUMN customization_json TEXT NOT NULL DEFAULT '{}'"
             ))
+    auth_cols = [
+        ("full_name", "VARCHAR(100)"),
+        ("email", "VARCHAR(254)"),
+        ("email_key", "VARCHAR(254)"),
+        ("password_hash", "VARCHAR(255)"),
+        ("auth_provider", "VARCHAR(32) NOT NULL DEFAULT 'device'"),
+        ("google_sub", "VARCHAR(128)"),
+        ("facebook_id", "VARCHAR(128)"),
+        ("password_reset_token_hash", "VARCHAR(64)"),
+        ("password_reset_expires_at", "DATETIME"),
+        ("last_login_at", "DATETIME"),
+    ]
+    for col_name, col_type in auth_cols:
+        if col_name not in profile_columns:
+            with engine.begin() as connection:
+                connection.execute(text(f"ALTER TABLE player_profiles ADD COLUMN {col_name} {col_type}"))
     invitation_columns = {column["name"] for column in inspect(engine).get_columns("game_invitations")}
     if "active_key" not in invitation_columns:
         with engine.begin() as connection:

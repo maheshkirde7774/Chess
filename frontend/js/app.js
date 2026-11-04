@@ -154,6 +154,7 @@ class QuadChessApp {
         }
 
         if (viewId === "view-profile") window.FOURXProfile?.refresh();
+        if (viewId === "view-auth") window.FOURXAuth?.clearAlert?.();
         if (viewId === "view-friends") this.social?.onViewEntered();
         window.soundSystem.playClick();
     }

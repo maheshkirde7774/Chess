@@ -127,7 +127,18 @@ class FOURXProfile {
             const element = document.getElementById(id);
             if (element) element.textContent = value;
         };
-        setText("profile-full-name", profile.username);
+        if (profile.full_name) {
+            setText("profile-full-name", `${profile.full_name} (@${profile.username})`);
+        } else {
+            setText("profile-full-name", profile.username);
+        }
+        if (window.FOURXAuth) {
+            if (profile.is_registered) {
+                window.FOURXAuth.updateUIForUser(profile);
+            } else {
+                window.FOURXAuth.updateUIForAnonymous();
+            }
+        }
         const premiumAvatars = new Set(["titan", "oracle", "nebula_wolf"]);
         const avatar = premiumAvatars.has(profile.avatar)
             && window.FOURXSubscription?.premium !== true

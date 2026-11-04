@@ -21,6 +21,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.db import (
+    ActiveSessionModel,
     DailyPuzzleModel,
     MatchRecordModel,
     PlayerDailyPuzzleModel,
@@ -199,7 +200,20 @@ def _authenticated_profile(
         PlayerProfileModel.token_hash == computed_hash
     ).first()
     if profile is None or not secrets.compare_digest(profile.token_hash, computed_hash):
-        raise HTTPException(status_code=401, detail="Invalid profile credential")
+        # Also check ActiveSessionModel for non-revoked session
+        session_record = db.query(ActiveSessionModel).filter(
+            ActiveSessionModel.token_hash == computed_hash,
+            ActiveSessionModel.is_revoked == False,
+        ).first()
+        if session_record:
+            profile = db.query(PlayerProfileModel).filter(
+                PlayerProfileModel.id == session_record.profile_id
+            ).first()
+            if session_record:
+                session_record.last_used_at = datetime.now(timezone.utc)
+                db.commit()
+        if profile is None:
+            raise HTTPException(status_code=401, detail="Invalid profile credential")
     if profile.is_suspended or profile.deleted_at is not None:
         raise HTTPException(status_code=403, detail="This profile is unavailable")
     return profile
@@ -250,6 +264,10 @@ def _profile_payload(db: Session, profile: PlayerProfileModel) -> dict[str, Any]
         "avatar": profile.avatar,
         "timezone": profile.timezone,
         "joined_at": profile.created_at.isoformat() if profile.created_at else None,
+        "full_name": getattr(profile, "full_name", None),
+        "email": getattr(profile, "email", None),
+        "auth_provider": getattr(profile, "auth_provider", None) or "local",
+        "is_registered": bool(getattr(profile, "email", None) or getattr(profile, "password_hash", None)),
         **_level_progress(profile.xp),
         "ratings": {
             "classic": profile.classic_rating,

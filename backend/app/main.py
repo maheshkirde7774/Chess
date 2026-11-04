@@ -47,6 +47,7 @@ from app.subscriptions import (
     router as subscription_router,
     validate_spectator_ticket,
 )
+from app.auth import router as auth_router
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
@@ -208,6 +209,7 @@ app.include_router(classic_router)
 app.include_router(profile_router)
 app.include_router(social_router)
 app.include_router(subscription_router)
+app.include_router(auth_router)
 
 # ----------------- REST ENDPOINTS -----------------
 
