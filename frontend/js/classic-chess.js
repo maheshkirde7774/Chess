@@ -413,7 +413,7 @@ class ClassicChessUI {
         const wasPlaying = this.roomStatus === "PLAYING";
         const wasCompleted = this.roomStatus === "COMPLETED";
         const previousMoveCount = this.state?.moves?.length || 0;
-        this.state = data.game_state || this.state;
+        this.state = data.game_state || data.state || this.state;
         this.players = data.players || this.players;
         this.roomStatus = data.status || this.state?.status || this.roomStatus;
         this.serverStateAt = data.server_time ? data.server_time * 1000 : Date.now();

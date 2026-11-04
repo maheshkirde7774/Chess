@@ -40,6 +40,60 @@ class QuadChessApp {
         this.initPuzzlesList();
         this.initLeaderboardData();
         this.restoreFourPlayerSession();
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get("preview_mobile") === "1" || urlParams.get("mobile") === "1") {
+            const root = document.getElementById("app-root");
+            if (root) {
+                root.style.maxWidth = "390px";
+                root.style.width = "390px";
+                root.style.margin = "0";
+            }
+        }
+        if (urlParams.get("view") === "classic" || urlParams.get("preview") === "classic") {
+            const runInit = () => {
+                this.switchView("view-classic");
+                this.classicChess.roomCode = "TEST12";
+                this.classicChess.playerId = "player1";
+                this.classicChess.humanSide = "white";
+                this.classicChess.mySide = "white";
+                this.classicChess.mode = "ai";
+                this.classicChess.ai = { ai_side: "black" };
+                this.classicChess.state = {
+                    fen: "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+                    moves: [
+                        { uci: "e2e4", san: "e4" },
+                        { uci: "e7e5", san: "e5" },
+                        { uci: "g1f3", san: "Nf3" },
+                        { uci: "b8c6", san: "Nc6" },
+                        { uci: "f1c4", san: "Bc4" },
+                        { uci: "g8f6", san: "Nf6" }
+                    ],
+                    turn: "white",
+                    legal_moves: [{ from: "d2", to: "d4" }],
+                    in_check: false,
+                    draw_offer: null,
+                    can_claim_draw: false,
+                    last_mover: "black",
+                    captured: { white: ["p"], black: ["p"] },
+                    clocks: { white: 582, black: 591 }
+                };
+                this.classicChess.players = {
+                    white: { name: "Player 1", rating: 1200 },
+                    black: { name: "Commander AI (1400)", rating: 1400 }
+                };
+                this.classicChess.roomStatus = "PLAYING";
+                const mockData = {
+                    room_code: "TEST12",
+                    status: "PLAYING",
+                    human_side: "white",
+                    state: this.classicChess.state,
+                    players: this.classicChess.players,
+                    ai: { ai_side: "black" }
+                };
+                this.classicChess.enterRoom(mockData, "ai");
+            };
+            runInit();
+        }
     }
 
     /* ==================== VIEW NAVIGATION ==================== */
@@ -74,13 +128,19 @@ class QuadChessApp {
         const turnBadge = document.getElementById("turn-badge");
         const roomCodeTag = document.getElementById("room-code-tag");
 
-        if (viewId === "view-game") {
+        if (viewId === "view-game" || viewId === "view-classic") {
             appRoot?.classList.add("in-game-view");
-            backBtn?.classList.remove("hidden");
-            turnBadge?.classList.remove("hidden");
-            if (this.isOnlineMode) roomCodeTag?.classList.remove("hidden");
-            // Dynamically resize chessboard to maximum available arena dimensions
-            setTimeout(() => this.ui?.resizeBoard?.(), 40);
+            if (viewId === "view-game") {
+                backBtn?.classList.remove("hidden");
+                turnBadge?.classList.remove("hidden");
+                if (this.isOnlineMode) roomCodeTag?.classList.remove("hidden");
+                // Dynamically resize chessboard to maximum available arena dimensions
+                setTimeout(() => this.ui?.resizeBoard?.(), 40);
+            } else {
+                backBtn?.classList.add("hidden");
+                turnBadge?.classList.add("hidden");
+                roomCodeTag?.classList.add("hidden");
+            }
         } else {
             appRoot?.classList.remove("in-game-view");
             if (viewId === "view-membership") {
