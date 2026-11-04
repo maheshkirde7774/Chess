@@ -637,17 +637,25 @@ class FOURXAuth {
 
     async handleGoogleLogin() {
         this.clearAlert();
-        if (this.gisInitialized && window.google?.accounts?.id) {
+        const isCapacitorNative = !!(window.Capacitor?.isNativePlatform?.() || window.Capacitor?.getPlatform?.() === "android");
+
+        if (!isCapacitorNative && this.gisInitialized && window.google?.accounts?.id) {
+            // Web browser: Use Google Identity Services popup flow
             window.google.accounts.id.prompt((notification) => {
                 if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-                    console.info("GIS prompt status:", notification.getNotDisplayedReason() || notification.getSkippedReason());
+                    console.info("GIS prompt status:", notification.getNotDisplayedReason?.() || notification.getSkippedReason?.());
                 }
             });
         } else {
+            // Android WebView / fallback: Google disallows embedded webviews, so launch system browser OAuth flow
             try {
                 const data = await this.request("/api/auth/google/url");
                 if (data.configured && data.url) {
-                    window.location.href = data.url;
+                    if (isCapacitorNative) {
+                        window.open(data.url, "_system");
+                    } else {
+                        window.location.href = data.url;
+                    }
                 } else {
                     this.showAlert(
                         "Google Sign-In is configured on the backend and waiting for your GOOGLE_CLIENT_ID environment variable. Once set in your cloud deployment, one-click Google Login activates automatically.",
@@ -723,21 +731,49 @@ class FOURXAuth {
     }
 
     checkUrlForOAuthCallback() {
-        const urlParams = new URLSearchParams(window.location.search);
-        const token = urlParams.get("auth_token");
-        const error = urlParams.get("auth_error");
+        const processTokenOrError = (searchOrUrl) => {
+            if (!searchOrUrl) return;
+            let urlParams;
+            try {
+                if (searchOrUrl.includes("?")) {
+                    urlParams = new URLSearchParams(searchOrUrl.substring(searchOrUrl.indexOf("?")));
+                } else {
+                    urlParams = new URLSearchParams(searchOrUrl);
+                }
+            } catch (e) {
+                return;
+            }
+            const token = urlParams.get("auth_token");
+            const error = urlParams.get("auth_error");
 
-        if (token) {
-            this.setToken(token);
-            // Clean URL query parameters without reloading
-            const cleanUrl = window.location.origin + window.location.pathname;
-            window.history.replaceState({}, document.title, cleanUrl);
-            window.app?.showToast("Successfully authenticated!");
-        } else if (error) {
-            const cleanUrl = window.location.origin + window.location.pathname;
-            window.history.replaceState({}, document.title, cleanUrl);
-            this.showAuthView("login");
-            this.showAlert(decodeURIComponent(error));
+            if (token) {
+                this.setToken(token);
+                const cleanUrl = window.location.origin + window.location.pathname;
+                window.history.replaceState({}, document.title, cleanUrl);
+                window.app?.showToast("Successfully authenticated with Google!");
+                this.syncAuthStatus();
+            } else if (error) {
+                const cleanUrl = window.location.origin + window.location.pathname;
+                window.history.replaceState({}, document.title, cleanUrl);
+                this.showAuthView("login");
+                this.showAlert(decodeURIComponent(error));
+            }
+        };
+
+        // Standard web browser check
+        processTokenOrError(window.location.search);
+
+        // Capacitor appUrlOpen listener for native Android deep links
+        if (window.Capacitor?.Plugins?.App?.addListener) {
+            try {
+                window.Capacitor.Plugins.App.addListener("appUrlOpen", (data) => {
+                    if (data?.url) {
+                        processTokenOrError(data.url);
+                    }
+                });
+            } catch (e) {
+                console.warn("Capacitor App listener error:", e);
+            }
         }
     }
 }

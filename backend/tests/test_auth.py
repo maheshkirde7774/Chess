@@ -352,6 +352,65 @@ def test_google_sign_in_prevents_insecure_linking(fake_request):
         db.close()
 
 
+def test_google_token_login_missing_credentials(fake_request):
+    db = SessionLocal()
+    try:
+        os.environ["GOOGLE_CLIENT_ID"] = "test-client-id"
+        with pytest.raises(HTTPException) as exc:
+            google_token_login(GoogleAuthRequest(credential=None), fake_request, db=db)
+        assert exc.value.status_code == 422
+    finally:
+        db.close()
+
+
+def test_google_token_login_expired_token(fake_request):
+    client_id = "822220189205-test.apps.googleusercontent.com"
+    os.environ["GOOGLE_CLIENT_ID"] = client_id
+
+    # id_token.verify_oauth2_token raises ValueError("Token expired: ...")
+    with patch("app.auth.id_token.verify_oauth2_token", side_effect=ValueError("Token used too late: expired")):
+        with pytest.raises(HTTPException) as exc:
+            verify_google_id_token("expired.google.token", client_id)
+        assert exc.value.status_code == 401
+        assert "invalid or expired" in exc.value.detail.lower()
+
+
+def test_protected_endpoints_with_google_session(fake_request):
+    from app.profiles import get_profile, update_profile, ProfileUpdate
+    db = SessionLocal()
+    try:
+        client_id = "822220189205-test.apps.googleusercontent.com"
+        os.environ["GOOGLE_CLIENT_ID"] = client_id
+
+        mock_payload = {
+            "iss": "https://accounts.google.com",
+            "aud": client_id,
+            "sub": "google_sub_protected_777",
+            "email": "protected.player@gmail.com",
+            "email_verified": True,
+            "name": "Protected Grandmaster"
+        }
+
+        with patch("app.auth.id_token.verify_oauth2_token", return_value=mock_payload):
+            req = GoogleAuthRequest(credential="valid.token")
+            res = google_token_login(req, fake_request, authorization=None, db=db)
+            token = res["access_token"]
+            assert token
+
+            # Verify GET /api/profile works with the issued Google bearer token
+            prof = get_profile(authorization=f"Bearer {token}", db=db)
+            assert prof["email"] == "protected.player@gmail.com"
+            assert prof["full_name"] == "Protected Grandmaster"
+            assert prof["auth_provider"] == "google"
+            assert prof["is_registered"] is True
+
+            # Verify PATCH /api/profile works
+            updated = update_profile(ProfileUpdate(avatar="queen"), authorization=f"Bearer {token}", db=db)
+            assert updated["avatar"] == "queen"
+    finally:
+        db.close()
+
+
 def test_oauth_url_generation(fake_request):
     # Google OAuth with env variable set
     os.environ["GOOGLE_CLIENT_ID"] = "test-client-id.apps.googleusercontent.com"

@@ -502,32 +502,17 @@ def google_oauth_url(http_request: Request):
     return {"configured": True, "url": url}
 
 
-@router.post("/google")
-def google_token_login(
-    req: GoogleAuthRequest,
-    http_request: Request,
-    authorization: Optional[str] = Header(default=None),
-    db: Session = Depends(get_db),
-):
+def link_or_create_google_user(
+    token_claims: Dict[str, Any],
+    authorization: Optional[str],
+    db: Session,
+    http_request: Optional[Request] = None,
+) -> tuple[str, PlayerProfileModel]:
     """
-    Authenticates via Google Identity Services (GIS) ID token credential.
-    Verifies signature, issuer, audience, and expiry cryptographically.
-    Links authenticated Google account to user profile securely while preventing
-    insecure email-based account takeovers and preserving anonymous guest profile progress.
+    Core account linking logic for verified Google identity claims.
+    Preserves anonymous device profiles and existing game stats, ratings, and achievements.
+    Prevents insecure email-based account takeovers.
     """
-    enforce_room_rate_limit(http_request, "auth-google", limit=30)
-    if not req.credential:
-        raise HTTPException(status_code=422, detail="Google credential token is required")
-
-    client_id = os.getenv("GOOGLE_CLIENT_ID")
-    if not client_id:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Google Sign-In is not configured on the server. Set GOOGLE_CLIENT_ID."
-        )
-
-    # Cryptographically verify token claims using Google's official library
-    token_claims = verify_google_id_token(req.credential, client_id)
     google_sub = token_claims["sub"]
     email = token_claims["email"]
     name = token_claims["name"]
@@ -545,7 +530,6 @@ def google_token_login(
         if not profile.full_name and name:
             profile.full_name = name
     else:
-        # No profile bound to this google_sub yet.
         # Check if an existing profile has this email_key
         existing_email_user = db.query(PlayerProfileModel).filter(
             PlayerProfileModel.email_key == email,
@@ -553,8 +537,7 @@ def google_token_login(
         ).first()
 
         if existing_email_user:
-            # An account with this email exists.
-            # Security rule: Prevent insecure account linking.
+            # Prevent insecure account linking.
             # If the user is currently authenticated as this exact user, they can link Google.
             # Otherwise, reject to prevent taking over password-based accounts.
             if current_profile and current_profile.id == existing_email_user.id:
@@ -580,7 +563,6 @@ def google_token_login(
         else:
             # Create a brand new FOURX profile for this Google user
             import uuid
-            # Generate unique username based on name or email prefix
             base_user = re.sub(r"[^A-Za-z0-9_]", "", name.replace(" ", "_"))
             if len(base_user) < 3:
                 base_user = re.sub(r"[^A-Za-z0-9_]", "", email.split("@")[0])
@@ -621,8 +603,38 @@ def google_token_login(
 
     db.commit()
     _invalidate_leaderboard_cache()
-
     raw_token = create_user_session(profile, db, http_request)
+    return raw_token, profile
+
+
+@router.post("/google")
+def google_token_login(
+    req: GoogleAuthRequest,
+    http_request: Request,
+    authorization: Optional[str] = Header(default=None),
+    db: Session = Depends(get_db),
+):
+    """
+    Authenticates via Google Identity Services (GIS) ID token credential.
+    Verifies signature, issuer, audience, and expiry cryptographically.
+    Links authenticated Google account to user profile securely while preventing
+    insecure email-based account takeovers and preserving anonymous guest profile progress.
+    """
+    enforce_room_rate_limit(http_request, "auth-google", limit=30)
+    if not req.credential:
+        raise HTTPException(status_code=422, detail="Google credential token is required")
+
+    client_id = os.getenv("GOOGLE_CLIENT_ID")
+    if not client_id:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Google Sign-In is not configured on the server. Set GOOGLE_CLIENT_ID."
+        )
+
+    # Cryptographically verify token claims using Google's official library
+    token_claims = verify_google_id_token(req.credential, client_id)
+    raw_token, profile = link_or_create_google_user(token_claims, authorization, db, http_request)
+
     return {
         "success": True,
         "access_token": raw_token,
@@ -638,7 +650,7 @@ def google_oauth_callback(
     http_request: Request = None,
     db: Session = Depends(get_db),
 ):
-    """Handles Google OAuth authorization code redirect."""
+    """Handles Google OAuth authorization code redirect (e.g. system browser / Android WebView fallback)."""
     if error or not code:
         return RedirectResponse(url="/?auth_error=google_denied")
 
@@ -666,48 +678,20 @@ def google_oauth_callback(
         )
         with urlopen(token_req, timeout=10) as resp:
             token_data = json.loads(resp.read().decode("utf-8"))
-        id_token = token_data.get("id_token")
-        if not id_token:
+        id_token_str = token_data.get("id_token")
+        if not id_token_str:
             return RedirectResponse(url="/?auth_error=google_exchange_failed")
 
-        # Verify ID token
-        info_req = URLRequest(f"https://oauth2.googleapis.com/tokeninfo?id_token={id_token}")
-        with urlopen(info_req, timeout=8) as resp:
-            payload = json.loads(resp.read().decode("utf-8"))
+        # Cryptographically verify token claims
+        token_claims = verify_google_id_token(id_token_str, client_id)
+        raw_token, profile = link_or_create_google_user(token_claims, None, db, http_request)
 
-        google_sub = payload.get("sub")
-        email = payload.get("email", "").lower()
-        name = payload.get("name") or "Commander"
-
-        profile = db.query(PlayerProfileModel).filter(
-            (PlayerProfileModel.google_sub == google_sub) | (PlayerProfileModel.email_key == email),
-            PlayerProfileModel.deleted_at.is_(None)
-        ).first()
-
-        if not profile:
-            import uuid
-            suffix = secrets.randbelow(900_000) + 100_000
-            username = f"Commander{suffix}"
-            profile = PlayerProfileModel(
-                id=str(uuid.uuid4()),
-                full_name=name,
-                username=username,
-                username_key=username.casefold(),
-                email=email,
-                email_key=email,
-                google_sub=google_sub,
-                auth_provider="google",
-                avatar="knight",
-                token_hash=_token_hash(secrets.token_urlsafe(48)),
-                created_at=datetime.now(timezone.utc),
-            )
-            db.add(profile)
-
-        db.commit()
-        raw_token = create_user_session(profile, db, http_request)
         return RedirectResponse(url=f"/?auth_token={raw_token}")
+    except HTTPException as http_exc:
+        return RedirectResponse(url=f"/?auth_error={urlencode({'e': http_exc.detail})}")
     except Exception as exc:
         logger.warning("Google callback error: %s", exc)
+        return RedirectResponse(url="/?auth_error=google_failed")
         return RedirectResponse(url="/?auth_error=google_failed")
 
 
