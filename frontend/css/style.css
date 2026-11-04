@@ -125,10 +125,11 @@ html, body {
 }
 
 .brand-badge {
+    font-family: var(--font-heading);
     font-size: 0.62rem;
     font-weight: 700;
     letter-spacing: 1.2px;
-    color: var(--color-p1);
+    color: var(--color-gold);
 }
 
 .icon-btn {
@@ -172,11 +173,12 @@ html, body {
     font-size: 0.8rem;
     font-weight: 700;
     letter-spacing: 0.8px;
-    padding: 5px 12px;
+    padding: 5px 14px;
     border-radius: var(--radius-full);
-    border: 1px solid var(--color-p1);
-    color: var(--color-p1);
-    background: var(--color-p1-muted);
+    border: 1px solid var(--border-active);
+    color: var(--color-gold);
+    background: var(--color-gold-muted);
+    font-variant-numeric: tabular-nums;
 }
 
 .room-tag {

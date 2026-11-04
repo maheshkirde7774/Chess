@@ -85,10 +85,24 @@ describe("Frontend SPA Navigation & Architecture Tests", () => {
     test("Black + Gold primary theme tokens are declared in neon-theme.css", () => {
         assert.ok(themeSrc.includes("--bg-app: #080808;"), "--bg-app must be #080808 (Near Black)");
         assert.ok(themeSrc.includes("--bg-surface: #101010;"), "--bg-surface must be #101010 (Deep Black)");
+        assert.ok(themeSrc.includes("--bg-card: #191919;"), "--bg-card must be #191919 (Dark Surface)");
+        assert.ok(themeSrc.includes("--border-card: #252525;"), "--border-card must be #252525 (Charcoal)");
         assert.ok(themeSrc.includes("--color-gold: #D4AF37;"), "--color-gold must be #D4AF37 (Primary Gold)");
         assert.ok(themeSrc.includes("--color-gold-light: #E8C96A;"), "--color-gold-light must be #E8C96A (Light Gold)");
+        assert.ok(themeSrc.includes("--color-silver: #E8E8E8;"), "--color-silver must be #E8E8E8 (Silver)");
+        assert.ok(themeSrc.includes("--color-text-secondary: #A3A3A3;"), "--color-text-secondary must be #A3A3A3");
         assert.ok(themeSrc.includes("--font-heading: 'Space Grotesk'"), "Heading font must be Space Grotesk");
         assert.ok(themeSrc.includes("--font-body: 'Inter'"), "Body font must be Inter");
+        assert.ok(themeSrc.includes("font-variant-numeric: tabular-nums;"), "Tabular numerals utility must be configured");
+    });
+
+    test("Modal close buttons use SVG icons without raw characters", () => {
+        const closeBtns = htmlSrc.match(/<button class="modal-close-btn"[^>]*>([\s\S]*?)<\/button>/g);
+        assert.ok(closeBtns && closeBtns.length >= 7, "All modals must have close buttons");
+        for (const btn of closeBtns) {
+            assert.ok(btn.includes("<svg"), "Modal close button must use SVG icon");
+            assert.ok(!btn.includes("✕") && !btn.includes("?") && !btn.includes("×"), "Modal close button must not use raw characters");
+        }
     });
 
     test("Google Fonts link in index.html imports Inter and Space Grotesk", () => {

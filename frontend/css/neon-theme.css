@@ -8,12 +8,12 @@
     /* Brand Surfaces — Black + Charcoal Hierarchy (Zero Blue) */
     --bg-app: #080808;             /* Near Black: App canvas & backdrop */
     --bg-surface: #101010;         /* Deep Black: Navigation, headers, panels */
-    --bg-card: #141414;            /* Dark Surface: Interactive cards & containers */
-    --bg-card-hover: #1c1c1c;      /* Subtle lift on hover */
-    --bg-card-active: #242424;     /* Active press state */
-    --bg-elevated: #1e1e1e;        /* Elevated menus & dialogs */
+    --bg-card: #191919;            /* Dark Surface: Interactive cards & containers */
+    --bg-card-hover: #222222;      /* Subtle lift on hover */
+    --bg-card-active: #282828;     /* Active press state */
+    --bg-elevated: #1f1f1f;        /* Elevated menus & dialogs */
     --bg-glass: rgba(16, 16, 16, 0.94);
-    --bg-glass-subtle: rgba(22, 22, 22, 0.82);
+    --bg-glass-subtle: rgba(25, 25, 25, 0.85);
     --bg-overlay: rgba(8, 8, 8, 0.94);
 
     /* Borders & Hairlines */
@@ -40,6 +40,15 @@
     --font-heading: 'Space Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     --font-mono: 'Space Grotesk', 'Inter', monospace;
+
+    /* Consistent Typography Scale */
+    --text-hero: clamp(1.875rem, 4vw, 2.25rem);       /* 30–36px Main headings */
+    --text-section: clamp(1.25rem, 2.5vw, 1.5rem);    /* 20–24px Section headings */
+    --text-card: 1.0625rem;                           /* 17px Card headings */
+    --text-body: 0.9375rem;                           /* 15px Body text */
+    --text-button: 0.9375rem;                         /* 15px Button text */
+    --text-label: 0.75rem;                            /* 12px Small labels */
+    --text-micro: 0.6875rem;                          /* 11px Micro badges */
 
     /* Functional Accents (Non-Blue) */
     --color-danger: #E85D04;       /* Tactical alert / resign warning */
@@ -144,4 +153,36 @@
     color: #444444 !important;
     opacity: 0.5;
     filter: grayscale(1);
+}
+
+/* ========================================================== */
+/* TABULAR NUMERALS & REFINED ACCESSIBILITY */
+/* ========================================================== */
+
+.tabular-nums,
+.classic-clock,
+.player-clock,
+.turn-indicator,
+.time-display,
+.timer-text,
+.player-rating,
+.leaderboard-rating,
+.rating-badge,
+.rating-num,
+.stat-value,
+.dossier-stat-num {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
+}
+
+/* Respect Reduced Motion Preferences */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.001ms !important;
+        scroll-behavior: auto !important;
+    }
 }
