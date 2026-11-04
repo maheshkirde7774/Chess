@@ -49,8 +49,14 @@ AVATAR_UNLOCK_XP = {
     "phoenix": 400,
     "cyber_cat": 600,
     "royal_lion": 800,
+    "titan": 0,
+    "oracle": 0,
+    "nebula_wolf": 0,
 }
 AVATARS = set(AVATAR_UNLOCK_XP)
+PREMIUM_AVATARS = {"titan", "oracle", "nebula_wolf"}
+PREMIUM_BOARD_THEMES = {"singularity", "supernova"}
+PREMIUM_PIECE_SETS = {"obsidian", "holographic"}
 BOARD_THEME_UNLOCK_XP = {
     "classic_wood": 0,
     "marble": 0,
@@ -60,6 +66,8 @@ BOARD_THEME_UNLOCK_XP = {
     "royal_gold": 500,
     "neon_cyber": 800,
     "minimal_light": 0,
+    "singularity": 0,
+    "supernova": 0,
 }
 PIECE_SET_UNLOCK_XP = {
     "staunton": 0,
@@ -67,6 +75,8 @@ PIECE_SET_UNLOCK_XP = {
     "minimal": 100,
     "royal": 300,
     "futuristic": 600,
+    "obsidian": 0,
+    "holographic": 0,
 }
 PIECE_VALUES = {
     chess.PAWN: 1,
@@ -111,8 +121,12 @@ class CustomizationPreferences(BaseModel):
     board_theme: Literal[
         "classic_wood", "marble", "midnight", "ocean",
         "emerald", "royal_gold", "neon_cyber", "minimal_light",
+        "singularity", "supernova",
     ] = "classic_wood"
-    piece_set: Literal["staunton", "modern", "minimal", "royal", "futuristic"] = "staunton"
+    piece_set: Literal[
+        "staunton", "modern", "minimal", "royal", "futuristic",
+        "obsidian", "holographic",
+    ] = "staunton"
     sound: SoundPreferences = Field(default_factory=SoundPreferences)
     animations: AnimationPreferences = Field(default_factory=AnimationPreferences)
 
@@ -320,6 +334,10 @@ def update_profile(
     if update.avatar is not None:
         if update.avatar not in AVATARS:
             raise HTTPException(status_code=422, detail="Select an available avatar")
+        if update.avatar in PREMIUM_AVATARS:
+            from app.subscriptions import require_premium
+
+            require_premium(profile, db)
         required_xp = AVATAR_UNLOCK_XP[update.avatar]
         if profile.xp < required_xp:
             raise HTTPException(
@@ -366,6 +384,10 @@ def update_customization(
     db: Session = Depends(get_db),
 ):
     profile = _authenticated_profile(authorization, db)
+    if preferences.board_theme in PREMIUM_BOARD_THEMES or preferences.piece_set in PREMIUM_PIECE_SETS:
+        from app.subscriptions import require_premium
+
+        require_premium(profile, db)
     required_theme_xp = BOARD_THEME_UNLOCK_XP[preferences.board_theme]
     required_piece_xp = PIECE_SET_UNLOCK_XP[preferences.piece_set]
     if profile.xp < required_theme_xp:

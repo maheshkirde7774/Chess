@@ -21,6 +21,7 @@ from app.ws_manager import manager
 from app.room_limits import enforce_room_rate_limit
 from app.classic_ai import DIFFICULTIES, choose_move
 from app.profiles import profile_from_authorization, record_completed_match, classic_comeback
+from app.subscriptions import require_premium, validate_spectator_ticket
 
 logger = logging.getLogger("classic_chess")
 router = APIRouter()
@@ -696,6 +697,11 @@ async def classic_spectator_websocket(
     if not isinstance(auth, dict) or auth.get("type") not in {"AUTH", "SPECTATE"}:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
+    try:
+        premium_profile = validate_spectator_ticket(auth.get("premium_ticket"), db)
+    except HTTPException:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
     if room.get("is_private", True):
         token = auth.get("access_token")
         spectator_token = room.get("spectator_token")
@@ -744,8 +750,16 @@ async def classic_spectator_websocket(
         "type": "SPECTATOR_COUNT",
         "spectator_count": manager.spectator_count(manager_room),
     })
+    premium_checked_at = time.monotonic()
     try:
         while True:
+            if time.monotonic() - premium_checked_at >= 30:
+                try:
+                    require_premium(premium_profile, db)
+                except HTTPException:
+                    await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+                    return
+                premium_checked_at = time.monotonic()
             try:
                 raw_message = await asyncio.wait_for(websocket.receive_text(), timeout=15)
             except asyncio.TimeoutError:

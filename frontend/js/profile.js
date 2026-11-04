@@ -9,6 +9,9 @@ window.FOURX_AVATAR_ICONS = {
     phoenix: "🔥",
     cyber_cat: "🐈",
     royal_lion: "🦁",
+    titan: "🛡️",
+    oracle: "🔮",
+    nebula_wolf: "🐺",
 };
 
 class FOURXProfile {
@@ -18,6 +21,7 @@ class FOURXProfile {
         this.profile = null;
         this.ready = this.initialize();
         this.bindEvents();
+        window.addEventListener("fourx-premium-status", () => this.renderProfile());
     }
 
     authHeaders() {
@@ -124,7 +128,12 @@ class FOURXProfile {
             if (element) element.textContent = value;
         };
         setText("profile-full-name", profile.username);
-        setText("profile-avatar-icon", avatarIcons[profile.avatar] || avatarIcons.knight);
+        const premiumAvatars = new Set(["titan", "oracle", "nebula_wolf"]);
+        const avatar = premiumAvatars.has(profile.avatar)
+            && window.FOURXSubscription?.premium !== true
+            ? "knight"
+            : profile.avatar;
+        setText("profile-avatar-icon", avatarIcons[avatar] || avatarIcons.knight);
         setText("stat-total-games", profile.statistics.games);
         setText("stat-wins", profile.statistics.wins);
         setText("stat-losses", profile.statistics.losses);

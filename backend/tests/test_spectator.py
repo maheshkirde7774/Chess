@@ -1,9 +1,14 @@
+import hashlib
+import secrets
+from datetime import timedelta
+
 import pytest
 from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
-from app.db import init_db
+from app.db import SessionLocal, SubscriptionModel, get_utc_now, init_db
 from app.main import app
+from app import subscriptions
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -14,6 +19,48 @@ def setup_database():
 @pytest.fixture
 def client():
     return TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def billing_is_available(monkeypatch):
+    monkeypatch.setattr(subscriptions, "billing_is_configured", lambda: True)
+    monkeypatch.setattr(subscriptions, "STATUS_REFRESH_SECONDS", 86400)
+
+
+def _premium_credentials(client):
+    created = client.post("/api/profile", json={}).json()
+    token = created["access_token"]
+    profile_id = created["profile"]["id"]
+    raw_token = secrets.token_urlsafe(32)
+    db = SessionLocal()
+    try:
+        db.add(SubscriptionModel(
+            profile_id=profile_id,
+            product_id="fourx_premium_monthly",
+            purchase_token_hash=hashlib.sha256(raw_token.encode()).hexdigest(),
+            purchase_token_ciphertext="test-only",
+            status="active",
+            expires_at=get_utc_now() + timedelta(days=30),
+            auto_renew_enabled=True,
+            acknowledgement_state="ACKNOWLEDGEMENT_STATE_ACKNOWLEDGED",
+            verification_status="verified",
+            last_verified_at=get_utc_now(),
+        ))
+        db.commit()
+    finally:
+        db.close()
+    headers = {"Authorization": f"Bearer {token}"}
+    ticket = client.post(
+        "/api/subscription/spectator-ticket", headers=headers
+    ).json()["ticket"]
+    return headers, ticket
+
+
+def _spectator_auth(ticket, access_token=None):
+    message = {"type": "SPECTATE", "premium_ticket": ticket}
+    if access_token:
+        message["access_token"] = access_token
+    return message
 
 
 def _create_four_player_match(client, is_private=False):
@@ -36,12 +83,15 @@ def _create_four_player_match(client, is_private=False):
 def test_four_player_spectator_sync_updates_read_only_and_counts(client):
     host = _create_four_player_match(client)
     code = host["room_code"]
+    headers, ticket = _premium_credentials(client)
     assert code in [
-        game["room_code"] for game in client.get("/spectator/live-games").json()
+        game["room_code"] for game in client.get(
+            "/spectator/live-games", headers=headers
+        ).json()
     ]
 
     with client.websocket_connect(f"/ws/spectate/{code}") as spectator:
-        spectator.send_json({"type": "SPECTATE"})
+        spectator.send_json(_spectator_auth(ticket))
         initial = spectator.receive_json()
         assert initial["type"] == "SYNC_STATE"
         assert initial["game_mode"] == "four_player"
@@ -68,9 +118,9 @@ def test_four_player_spectator_sync_updates_read_only_and_counts(client):
         assert update["type"] == "MOVE_MADE"
         assert update["game_state"]["current_turn"] == 2
         assert update["move"]["from"] == [12, 6]
-    assert client.get("/spectator/live-games").status_code == 200
+    assert client.get("/spectator/live-games", headers=headers).status_code == 200
     with client.websocket_connect(f"/ws/spectate/{code}") as reconnect:
-        reconnect.send_json({"type": "SPECTATE"})
+        reconnect.send_json(_spectator_auth(ticket))
         assert reconnect.receive_json()["type"] == "SYNC_STATE"
         assert reconnect.receive_json()["spectator_count"] == 1
 
@@ -78,8 +128,11 @@ def test_four_player_spectator_sync_updates_read_only_and_counts(client):
 def test_private_four_player_match_requires_player_access_token(client):
     host = _create_four_player_match(client, is_private=True)
     code = host["room_code"]
+    headers, ticket = _premium_credentials(client)
     public_codes = [
-        game["room_code"] for game in client.get("/spectator/live-games").json()
+        game["room_code"] for game in client.get(
+            "/spectator/live-games", headers=headers
+        ).json()
     ]
     assert code not in public_codes
     room_state = client.get(f"/rooms/{code}").json()
@@ -94,7 +147,7 @@ def test_private_four_player_match_requires_player_access_token(client):
             spectator.receive_json()
 
     with client.websocket_connect(f"/ws/spectate/{code}") as spectator:
-        spectator.send_json({"type": "SPECTATE", "access_token": host["spectator_token"]})
+        spectator.send_json(_spectator_auth(ticket, host["spectator_token"]))
         assert spectator.receive_json()["type"] == "SYNC_STATE"
 
 
@@ -109,9 +162,10 @@ def test_classic_spectators_are_read_only_and_counts_are_connection_based(client
     assert client.post(f"/classic/rooms/{code}/start", json={
         "player_id": white["player_id"],
     }).status_code == 200
+    _, ticket = _premium_credentials(client)
 
     with client.websocket_connect(f"/ws/spectate/classic/{code}") as first:
-        first.send_json({"type": "SPECTATE"})
+        first.send_json(_spectator_auth(ticket))
         sync = first.receive_json()
         assert sync["type"] == "SYNC_STATE"
         assert sync["game_mode"] == "classic"
@@ -121,7 +175,7 @@ def test_classic_spectators_are_read_only_and_counts_are_connection_based(client
         assert first.receive_json()["spectator_count"] == 1
 
         with client.websocket_connect(f"/ws/spectate/classic/{code}") as second:
-            second.send_json({"type": "SPECTATE"})
+            second.send_json(_spectator_auth(ticket))
             second_sync = second.receive_json()
             assert second_sync["spectator_count"] == 2
             assert second.receive_json()["spectator_count"] == 2
@@ -162,12 +216,13 @@ def test_private_classic_match_uses_separate_spectator_key(client):
     assert client.post(f"/classic/rooms/{code}/start", json={
         "player_id": white["player_id"],
     }).status_code == 200
+    _, ticket = _premium_credentials(client)
     with pytest.raises(WebSocketDisconnect):
         with client.websocket_connect(f"/ws/spectate/classic/{code}") as spectator:
-            spectator.send_json({"type": "SPECTATE", "access_token": white["player_id"]})
+            spectator.send_json(_spectator_auth(ticket, white["player_id"]))
             spectator.receive_json()
     with client.websocket_connect(f"/ws/spectate/classic/{code}") as spectator:
-        spectator.send_json({"type": "SPECTATE", "access_token": white["spectator_token"]})
+        spectator.send_json(_spectator_auth(ticket, white["spectator_token"]))
         assert spectator.receive_json()["type"] == "SYNC_STATE"
 
 
@@ -204,9 +259,12 @@ def test_completed_public_classic_match_has_verified_replay_positions(client):
                     other = white_socket if socket is black_socket else black_socket
                     assert other.receive_json()["type"] == "GAME_STATE"
 
-    matches = client.get("/spectator/replays").json()
+    headers, _ = _premium_credentials(client)
+    matches = client.get("/spectator/replays", headers=headers).json()
     match = next(item for item in matches if item["room_code"] == code)
-    replay_response = client.get(f"/spectator/replays/{match['match_id']}")
+    replay_response = client.get(
+        f"/spectator/replays/{match['match_id']}", headers=headers
+    )
     assert replay_response.status_code == 200
     replay = replay_response.json()
     assert replay["result"] == "0-1"
@@ -233,9 +291,14 @@ def test_completed_public_four_player_match_replays_persisted_history(client):
             "player_id": player_id,
         }).status_code == 200
 
-    match = next(item for item in client.get("/spectator/replays").json()
+    headers, _ = _premium_credentials(client)
+    match = next(item for item in client.get(
+        "/spectator/replays", headers=headers
+    ).json()
                  if item["room_code"] == code)
-    replay_response = client.get(f"/spectator/replays/{match['match_id']}")
+    replay_response = client.get(
+        f"/spectator/replays/{match['match_id']}", headers=headers
+    )
     assert replay_response.status_code == 200
     replay = replay_response.json()
     assert replay["game_mode"] == "four_player"
@@ -259,9 +322,10 @@ def test_spectators_are_closed_after_four_player_match_completion(client):
     }).status_code == 200
 
     from app.main import manager
+    _, ticket = _premium_credentials(client)
 
     with client.websocket_connect(f"/ws/spectate/{code}") as spectator:
-        spectator.send_json({"type": "SPECTATE"})
+        spectator.send_json(_spectator_auth(ticket))
         spectator.receive_json()
         spectator.receive_json()
         for player_id in player_ids[:3]:

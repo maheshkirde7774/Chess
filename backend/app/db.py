@@ -87,6 +87,39 @@ class PlayerProfileModel(Base):
     customization_json = Column(Text, nullable=False, default="{}")
 
 
+class SubscriptionModel(Base):
+    __tablename__ = "subscriptions"
+    __table_args__ = (
+        UniqueConstraint("purchase_token_hash", name="uq_subscription_purchase_token_hash"),
+        Index("ix_subscription_profile_expiry", "profile_id", "expires_at"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    profile_id = Column(String(36), nullable=False, index=True)
+    product_id = Column(String(80), nullable=False)
+    purchase_token_hash = Column(String(64), nullable=False)
+    purchase_token_ciphertext = Column(Text, nullable=False)
+    status = Column(String(32), nullable=False)
+    purchase_date = Column(DateTime, nullable=True)
+    expires_at = Column(DateTime, nullable=False)
+    auto_renew_enabled = Column(Boolean, nullable=False, default=False)
+    acknowledgement_state = Column(String(32), nullable=False)
+    verification_status = Column(String(16), nullable=False)
+    last_verified_at = Column(DateTime, nullable=False, default=get_utc_now)
+    created_at = Column(DateTime, nullable=False, default=get_utc_now)
+    updated_at = Column(DateTime, nullable=False, default=get_utc_now, onupdate=get_utc_now)
+
+
+class GooglePlayNotificationModel(Base):
+    __tablename__ = "google_play_notifications"
+
+    id = Column(Integer, primary_key=True, index=True)
+    message_id = Column(String(128), unique=True, nullable=False, index=True)
+    notification_type = Column(String(64), nullable=False)
+    received_at = Column(DateTime, nullable=False, default=get_utc_now)
+    processed_at = Column(DateTime, nullable=True)
+
+
 class MatchRecordModel(Base):
     __tablename__ = "match_records"
     __table_args__ = (

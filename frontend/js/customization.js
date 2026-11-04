@@ -33,6 +33,8 @@ const CUSTOMIZATION_THEMES = [
     { id: "royal_gold", name: "Royal Gold", unlockXp: 500, colors: ["#f0d7a1", "#7c5929"] },
     { id: "neon_cyber", name: "Neon Cyber", unlockXp: 800, colors: ["#b6c6ee", "#433370"] },
     { id: "minimal_light", name: "Minimal Light", unlockXp: 0, colors: ["#f2f1ed", "#626a73"] },
+    { id: "singularity", name: "Singularity", premium: true, colors: ["#cad0e8", "#35395b"] },
+    { id: "supernova", name: "Supernova", premium: true, colors: ["#f4c6a9", "#6a3159"] },
 ];
 
 const CUSTOMIZATION_PIECE_SETS = [
@@ -41,6 +43,8 @@ const CUSTOMIZATION_PIECE_SETS = [
     { id: "minimal", name: "Minimal", unlockXp: 100, glyphs: ["♔", "♕", "♖", "♗", "♘", "♙"] },
     { id: "royal", name: "Royal", unlockXp: 300, glyphs: ["♔", "♕", "♖", "♗", "♘", "♙"] },
     { id: "futuristic", name: "Futuristic", unlockXp: 600, glyphs: ["♔", "♕", "♖", "♗", "♘", "♙"] },
+    { id: "obsidian", name: "Obsidian", premium: true, glyphs: ["♔", "♕", "♖", "♗", "♘", "♙"] },
+    { id: "holographic", name: "Holographic", premium: true, glyphs: ["♔", "♕", "♖", "♗", "♘", "♙"] },
 ];
 
 const CUSTOMIZATION_AVATARS = [
@@ -54,6 +58,9 @@ const CUSTOMIZATION_AVATARS = [
     { id: "phoenix", name: "Phoenix", icon: "🔥", unlockXp: 400 },
     { id: "cyber_cat", name: "Cyber Cat", icon: "🐈", unlockXp: 600 },
     { id: "royal_lion", name: "Royal Lion", icon: "🦁", unlockXp: 800 },
+    { id: "titan", name: "Titan", icon: "🛡️", premium: true },
+    { id: "oracle", name: "Oracle", icon: "🔮", premium: true },
+    { id: "nebula_wolf", name: "Nebula Wolf", icon: "🐺", premium: true },
 ];
 
 const CUSTOMIZATION_EVENT_LABELS = [
@@ -84,11 +91,17 @@ class FOURXCustomization {
         this.avatar = "knight";
         this.draftAvatar = "knight";
         this.xp = 0;
+        this.premium = window.FOURXSubscription?.premium === true;
         this.profileReady = false;
         this.hasLocalPreferences = false;
         this.statusMessage = "Preview changes, then apply to save them.";
         this.loadLocal();
         this.bindEvents();
+        window.addEventListener("fourx-premium-status", event => {
+            this.premium = event.detail?.premium === true;
+            this.applyVisuals();
+            this.render();
+        });
         this.applyVisuals();
         this.loadProfilePreferences();
     }
@@ -222,6 +235,7 @@ class FOURXCustomization {
     }
 
     isUnlocked(item) {
+        if (item.premium) return this.premium;
         return this.xp >= item.unlockXp;
     }
 
@@ -248,7 +262,9 @@ class FOURXCustomization {
         button.append(this.createElement(
             "small",
             "custom-choice-status",
-            unlocked ? (selected ? "Selected" : "Unlocked") : `Unlock at ${item.unlockXp} XP`,
+            unlocked
+                ? (selected ? "Selected" : item.premium ? "Premium included" : "Unlocked")
+                : item.premium ? "Premium subscription required" : `Unlock at ${item.unlockXp} XP`,
         ));
         return button;
     }
@@ -406,8 +422,11 @@ class FOURXCustomization {
         if (apply) apply.disabled = locked;
         const status = document.getElementById("customization-status");
         if (status) {
+            const premiumLocked = [theme, pieces, avatar].some(item => item?.premium && !this.premium);
             status.textContent = locked
-                ? `Preview only: earn ${Math.max(theme?.unlockXp || 0, pieces?.unlockXp || 0, avatar?.unlockXp || 0)} XP to unlock the selected item.`
+                ? premiumLocked
+                    ? "Preview only: a FOURX Premium subscription is required for the selected collection."
+                    : `Preview only: earn ${Math.max(theme?.unlockXp || 0, pieces?.unlockXp || 0, avatar?.unlockXp || 0)} XP to unlock the selected item.`
                 : this.statusMessage;
             status.classList.toggle("error", this.statusMessage.includes("unavailable") || this.statusMessage.includes("failed"));
         }
@@ -417,8 +436,14 @@ class FOURXCustomization {
         if (!previewOnly) {
             const root = document.getElementById("app-root");
             if (root) {
-                root.dataset.boardTheme = this.preferences.board_theme;
-                root.dataset.pieceSet = this.preferences.piece_set;
+                const theme = CUSTOMIZATION_THEMES.find(item => item.id === this.preferences.board_theme);
+                const pieces = CUSTOMIZATION_PIECE_SETS.find(item => item.id === this.preferences.piece_set);
+                root.dataset.boardTheme = theme?.premium && !this.premium
+                    ? CUSTOMIZATION_DEFAULTS.board_theme
+                    : this.preferences.board_theme;
+                root.dataset.pieceSet = pieces?.premium && !this.premium
+                    ? CUSTOMIZATION_DEFAULTS.piece_set
+                    : this.preferences.piece_set;
                 const systemReduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches || false;
                 root.dataset.reducedMotion = String(this.preferences.animations.reduced_motion || systemReduced);
                 root.dataset.boardTransition = String(this.preferences.animations.board_transition);
@@ -451,8 +476,39 @@ class FOURXCustomization {
         if (!theme || !pieces || !avatar || !this.isUnlocked(theme)
             || !this.isUnlocked(pieces) || !this.isUnlocked(avatar)) return;
 
-        this.preferences = this.normalizePreferences(this.draft);
-        this.avatar = this.draftAvatar;
+        const nextPreferences = this.normalizePreferences(this.draft);
+        const nextAvatar = this.draftAvatar;
+        const requiresPremium = Boolean(theme.premium || pieces.premium || avatar.premium);
+        if (requiresPremium) {
+            try {
+                await window.FOURXProfile?.ready;
+                if (!window.FOURXProfile?.token) {
+                    throw new Error("A verified profile subscription is required.");
+                }
+                await window.FOURXProfile.request("/api/profile/customization", {
+                    method: "PUT",
+                    body: JSON.stringify(nextPreferences),
+                });
+                const profile = await window.FOURXProfile.request("/api/profile", {
+                    method: "PATCH",
+                    body: JSON.stringify({ avatar: nextAvatar }),
+                });
+                window.FOURXProfile.profile = profile;
+                window.FOURXProfile.renderProfile();
+                this.profileReady = true;
+                this.xp = profile.total_xp || this.xp;
+            } catch (error) {
+                this.statusMessage = `Premium preferences were not applied: ${error.message}`;
+                console.error("Could not save Premium customization.", error);
+                this.render();
+                return;
+            }
+        }
+        this.preferences = nextPreferences;
+        this.avatar = nextAvatar;
+        if (requiresPremium) {
+            this.statusMessage = "Premium preferences synchronized to your profile.";
+        }
         try {
             this.persistLocal();
             this.applyVisuals();
@@ -462,7 +518,7 @@ class FOURXCustomization {
             this.render();
             return;
         }
-        try {
+        if (!requiresPremium) try {
             await window.FOURXProfile?.ready;
             if (window.FOURXProfile?.token) {
                 await window.FOURXProfile.request("/api/profile/customization", {

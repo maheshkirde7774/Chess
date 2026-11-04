@@ -24,6 +24,7 @@ class SpectatorController {
         this.replayTimer = null;
         this.reconnectAttempts = 0;
         this.accessToken = null;
+        this.premiumTicket = null;
         this.bindEvents();
     }
 
@@ -71,6 +72,7 @@ class SpectatorController {
         this.stopSocket();
         this.stopReplay();
         this.accessToken = null;
+        this.premiumTicket = null;
     }
 
     async loadLobby() {
@@ -78,9 +80,14 @@ class SpectatorController {
         const replaysList = document.getElementById("live-replays-list");
         if (!gamesList || !replaysList) return;
         try {
+            await window.FOURXProfile?.ready;
             const [gamesResponse, replaysResponse] = await Promise.all([
-                fetch(`${window.CONFIG.getServerUrl()}/spectator/live-games`),
-                fetch(`${window.CONFIG.getServerUrl()}/spectator/replays`),
+                fetch(`${window.CONFIG.getServerUrl()}/spectator/live-games`, {
+                    headers: window.FOURXProfile?.authHeaders(),
+                }),
+                fetch(`${window.CONFIG.getServerUrl()}/spectator/replays`, {
+                    headers: window.FOURXProfile?.authHeaders(),
+                }),
             ]);
             const [games, replays] = await Promise.all([
                 gamesResponse.json(),
@@ -187,8 +194,20 @@ class SpectatorController {
         this.connect();
     }
 
-    connect() {
+    async connect() {
         if (!this.match || this.explicitlyClosed || this.isReplay) return;
+        try {
+            const result = await window.FOURXProfile.request(
+                "/api/subscription/spectator-ticket",
+                { method: "POST" },
+            );
+            if (this.explicitlyClosed || !this.match) return;
+            this.premiumTicket = result.ticket;
+        } catch (error) {
+            this.explicitlyClosed = true;
+            this.setConnectionLabel(`Premium spectator access unavailable: ${error.message}`);
+            return;
+        }
         const code = encodeURIComponent(this.match.room_code);
         const path = this.match.game_mode === "classic"
             ? `/spectate/classic/${code}`
@@ -197,7 +216,7 @@ class SpectatorController {
         this.socket = socket;
         socket.onopen = () => {
             if (this.socket !== socket) return;
-            const message = { type: "SPECTATE" };
+            const message = { type: "SPECTATE", premium_ticket: this.premiumTicket };
             if (this.accessToken) message.access_token = this.accessToken;
             socket.send(JSON.stringify(message));
         };
@@ -215,7 +234,7 @@ class SpectatorController {
             this.socket = null;
             if (event.code === 1008) {
                 this.explicitlyClosed = true;
-                this.setConnectionLabel("Match unavailable or spectator key invalid.");
+                this.setConnectionLabel("Premium spectator access expired or the match key is invalid.");
                 return;
             }
             if (!this.explicitlyClosed && !this.isCompleted) {
@@ -541,7 +560,8 @@ class SpectatorController {
         this.stopReplay();
         try {
             const response = await fetch(
-                `${window.CONFIG.getServerUrl()}/spectator/replays/${encodeURIComponent(match.match_id)}`
+                `${window.CONFIG.getServerUrl()}/spectator/replays/${encodeURIComponent(match.match_id)}`,
+                { headers: window.FOURXProfile?.authHeaders() },
             );
             const replay = await response.json();
             if (!response.ok) throw new Error(replay.detail || "Replay unavailable.");

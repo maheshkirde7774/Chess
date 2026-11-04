@@ -59,6 +59,8 @@ class QuadChessApp {
         if (viewId === "view-puzzles") this.dailyPuzzles?.onViewEntered();
         if (viewId === "view-live-games") this.spectator?.onLobbyEntered();
         if (viewId === "view-customization") window.FOURXCustomization?.onOpen();
+        if (viewId === "view-membership") window.FOURXSubscription?.onOpen();
+        window.FOURXAds?.refresh();
 
         // Update Bottom Nav active state
         document.querySelectorAll(".nav-tab-btn").forEach(btn => {

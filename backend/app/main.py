@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 from typing import Dict, Any, Optional
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Depends, Request, status
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Depends, Header, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -42,6 +42,11 @@ from app.classic import router as classic_router, classic_rooms
 from app.room_limits import enforce_room_rate_limit as _rate_limit
 from app.profiles import profile_from_authorization, record_completed_match, router as profile_router
 from app.social import presence_hub, router as social_router
+from app.subscriptions import (
+    require_premium,
+    router as subscription_router,
+    validate_spectator_ticket,
+)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
@@ -179,6 +184,7 @@ app.add_middleware(
 app.include_router(classic_router)
 app.include_router(profile_router)
 app.include_router(social_router)
+app.include_router(subscription_router)
 
 # ----------------- REST ENDPOINTS -----------------
 
@@ -402,8 +408,15 @@ def list_public_rooms(db: Session = Depends(get_db)):
     return rooms
 
 @app.get("/spectator/live-games")
-def list_live_spectator_games(db: Session = Depends(get_db)):
+def list_live_spectator_games(
+    authorization: Optional[str] = Header(default=None),
+    db: Session = Depends(get_db),
+):
     """Returns active public matches with real player and spectator counts."""
+    profile = profile_from_authorization(authorization, db)
+    if profile is None:
+        raise HTTPException(status_code=401, detail="A device profile credential is required")
+    require_premium(profile, db)
     now = datetime.now(timezone.utc)
     games = []
     four_player_records = db.query(RoomModel).filter(RoomModel.status == "PLAYING").all()
@@ -464,8 +477,15 @@ def list_live_spectator_games(db: Session = Depends(get_db)):
     return games
 
 @app.get("/spectator/replays")
-def list_public_spectator_replays(db: Session = Depends(get_db)):
+def list_public_spectator_replays(
+    authorization: Optional[str] = Header(default=None),
+    db: Session = Depends(get_db),
+):
     """Lists recent completed public online matches with persisted move records."""
+    profile = profile_from_authorization(authorization, db)
+    if profile is None:
+        raise HTTPException(status_code=401, detail="A device profile credential is required")
+    require_premium(profile, db)
     records = db.query(MatchRecordModel).order_by(
         MatchRecordModel.completed_at.desc()
     ).limit(100).all()
@@ -512,8 +532,16 @@ def list_public_spectator_replays(db: Session = Depends(get_db)):
     return replays
 
 @app.get("/spectator/replays/{match_id}")
-def get_public_spectator_replay(match_id: str, db: Session = Depends(get_db)):
+def get_public_spectator_replay(
+    match_id: str,
+    authorization: Optional[str] = Header(default=None),
+    db: Session = Depends(get_db),
+):
     """Returns verified stored move history and positions for a public match."""
+    profile = profile_from_authorization(authorization, db)
+    if profile is None:
+        raise HTTPException(status_code=401, detail="A device profile credential is required")
+    require_premium(profile, db)
     match = db.query(MatchRecordModel).filter(
         MatchRecordModel.match_id == match_id
     ).first()
@@ -1035,6 +1063,11 @@ async def four_player_spectator_websocket(
     if not isinstance(auth, dict) or auth.get("type") not in {"AUTH", "SPECTATE"}:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
+    try:
+        premium_profile = validate_spectator_ticket(auth.get("premium_ticket"), db)
+    except HTTPException:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
     if _settings(room_data)["is_private"]:
         token = auth.get("access_token")
         spectator_token = room_data.get("spectator_token")
@@ -1077,8 +1110,16 @@ async def four_player_spectator_websocket(
         "type": "SPECTATOR_COUNT",
         "spectator_count": manager.spectator_count(code),
     })
+    premium_checked_at = time.monotonic()
     try:
         while True:
+            if time.monotonic() - premium_checked_at >= 30:
+                try:
+                    require_premium(premium_profile, db)
+                except HTTPException:
+                    await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+                    return
+                premium_checked_at = time.monotonic()
             try:
                 raw_message = await asyncio.wait_for(websocket.receive_text(), timeout=15)
             except asyncio.TimeoutError:

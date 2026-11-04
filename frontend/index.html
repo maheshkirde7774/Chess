@@ -46,7 +46,7 @@
                     <span id="net-status-dot" class="status-dot offline"></span>
                     <span id="net-status-label">OFFLINE</span>
                 </div>
-                <button id="btn-membership-header" class="icon-btn vip-crown-btn" title="Customization Armory">👑</button>
+                <button id="btn-membership-header" class="icon-btn vip-crown-btn" title="FOURX Premium">👑</button>
                 <button id="btn-sound-toggle" class="icon-btn" title="Toggle Sound FX">🔊</button>
                 <button id="btn-nav-rules" class="icon-btn" title="Official Rules">?</button>
                 <button id="btn-nav-settings" class="icon-btn" title="Settings">⚙</button>
@@ -968,6 +968,9 @@
                                 <button type="button" data-profile-avatar="bishop" aria-label="Bishop avatar">♗</button>
                                 <button type="button" data-profile-avatar="knight" aria-label="Knight avatar">♘</button>
                                 <button type="button" data-profile-avatar="pawn" aria-label="Pawn avatar">♙</button>
+                                <button type="button" data-profile-avatar="titan" aria-label="Titan Premium avatar">🛡️</button>
+                                <button type="button" data-profile-avatar="oracle" aria-label="Oracle Premium avatar">🔮</button>
+                                <button type="button" data-profile-avatar="nebula_wolf" aria-label="Nebula Wolf Premium avatar">🐺</button>
                             </div>
                         </form>
                     </div>
@@ -1038,17 +1041,64 @@
                 </div>
             </section>
 
-            <!-- VIEW 7: CUSTOMIZATION ARMORY -->
+            <!-- VIEW: FOURX PREMIUM -->
             <section id="view-membership" class="app-view">
-                <div class="dashboard-scrollable">
-                    <div class="membership-vip-banner">
-                        <div class="vip-crown-large">♛</div>
-                        <h2>Customization Armory</h2>
-                        <p>Board themes, piece styles, and avatar collections unlock through verified profile XP. There are no purchases or simulated ownership states.</p>
-                        <button class="vip-upgrade-btn" id="btn-open-customization">
-                            Preview customizations
-                        </button>
+                <div class="dashboard-scrollable premium-scrollable">
+                    <section class="premium-hero">
+                        <span class="premium-eyebrow">FOURX MEMBERSHIP</span>
+                        <h2>Play free. Make it yours.</h2>
+                        <p>Classic 1v1 and Four-Player Chess stay free. Premium adds live spectating, completed match replays, an ad-free experience, and exclusive customization.</p>
+                        <div id="premium-current-status" class="premium-current-status" aria-live="polite">
+                            Checking subscription status…
+                        </div>
+                        <p id="premium-notice" class="premium-notice" aria-live="polite"></p>
+                    </section>
+                    <div class="premium-plans" aria-label="Premium subscription plans">
+                        <article class="premium-plan-card">
+                            <span class="premium-plan-period">1 MONTH</span>
+                            <h3>Monthly Premium</h3>
+                            <p class="premium-price">₹49 <small>/ month</small></p>
+                            <p class="premium-price-note">INR · ₹49 each month through Google Play. Auto-renews until canceled.</p>
+                            <button class="neon-btn primary-btn premium-subscribe-btn"
+                                    type="button" data-subscribe-product="fourx_premium_monthly">
+                                Subscribe Monthly
+                            </button>
+                        </article>
+                        <article class="premium-plan-card featured">
+                            <span class="premium-plan-period">1 YEAR · BEST VALUE</span>
+                            <h3>Yearly Premium</h3>
+                            <p class="premium-price">₹299 <small>/ year</small></p>
+                            <p class="premium-price-note">INR · ₹299 each year through Google Play. Auto-renews until canceled.</p>
+                            <button class="neon-btn primary-btn premium-subscribe-btn"
+                                    type="button" data-subscribe-product="fourx_premium_yearly">
+                                Subscribe Yearly
+                            </button>
+                        </article>
                     </div>
+                    <section class="premium-benefits-card">
+                        <h3>Premium benefits</h3>
+                        <ul>
+                            <li>Watch live public and private matches</li>
+                            <li>Replay eligible completed online matches</li>
+                            <li>Ad-free dashboard and gaming experience</li>
+                            <li>Exclusive board themes, piece collections, and avatars</li>
+                        </ul>
+                    </section>
+                    <p class="premium-disclosure">Google Play shows the charge and renewal date for confirmation before payment. Cancel anytime in Google Play; access remains through the paid expiry date. No FOURX web or real-money checkout is offered.</p>
+                    <section class="premium-manage-card">
+                        <div>
+                            <h3>Already subscribed?</h3>
+                            <p>Restore purchases on this profile or manage renewal in Google Play. Cancellation keeps access until the paid period ends.</p>
+                        </div>
+                        <div class="premium-manage-actions">
+                            <button id="premium-restore" class="neon-btn secondary-btn" type="button">
+                                Restore Purchases
+                            </button>
+                            <button id="premium-manage" class="neon-btn secondary-btn" type="button">
+                                Manage Subscription
+                            </button>
+                        </div>
+                    </section>
                 </div>
             </section>
 
@@ -1447,7 +1497,7 @@
 
                     <div class="setting-item">
                         <label>Display & Ad Preferences:</label>
-                        <small class="help-text">AdMob test banner containers are configured. Upgrade to Grandmaster VIP to permanently disable ad containers.</small>
+                        <small class="help-text">Android test ads appear only on the free dashboard. Ads never cover an active game; Premium hides them.</small>
                     </div>
 
                     <button id="btn-save-settings" class="neon-btn primary-btn submit-btn">Save Preferences</button>
@@ -1464,6 +1514,8 @@
     <script src="js/ui.js"></script>
     <script src="js/ws-client.js"></script>
     <script src="js/profile.js"></script>
+    <script src="js/subscription.js"></script>
+    <script src="js/ads.js"></script>
     <script src="js/customization.js"></script>
     <script src="js/social.js"></script>
     <script src="js/daily-puzzles.js"></script>
