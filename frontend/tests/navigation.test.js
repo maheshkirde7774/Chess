@@ -5,6 +5,8 @@ const path = require("node:path");
 
 describe("Frontend SPA Navigation & Architecture Tests", () => {
     const htmlSrc = fs.readFileSync(path.join(__dirname, "../index.html"), "utf-8");
+    const themeSrc = fs.readFileSync(path.join(__dirname, "../css/neon-theme.css"), "utf-8");
+    const styleSrc = fs.readFileSync(path.join(__dirname, "../css/style.css"), "utf-8");
 
     test("All primary SPA views exist in index.html", () => {
         const requiredViews = [
@@ -74,5 +76,38 @@ describe("Frontend SPA Navigation & Architecture Tests", () => {
         assert.equal(capConfig.appName, "FOURX");
         assert.equal(capConfig.webDir, "frontend");
         assert.equal(capConfig.server.cleartext, true);
+    });
+
+    test("Black + Gold primary theme tokens are declared in neon-theme.css", () => {
+        assert.ok(themeSrc.includes("--bg-app: #080808;"), "--bg-app must be #080808 (Near Black)");
+        assert.ok(themeSrc.includes("--bg-surface: #101010;"), "--bg-surface must be #101010 (Deep Black)");
+        assert.ok(themeSrc.includes("--color-gold: #D4AF37;"), "--color-gold must be #D4AF37 (Primary Gold)");
+        assert.ok(themeSrc.includes("--color-gold-light: #E8C96A;"), "--color-gold-light must be #E8C96A (Light Gold)");
+        assert.ok(themeSrc.includes("--font-heading: 'Space Grotesk'"), "Heading font must be Space Grotesk");
+        assert.ok(themeSrc.includes("--font-body: 'Inter'"), "Body font must be Inter");
+    });
+
+    test("Google Fonts link in index.html imports Inter and Space Grotesk", () => {
+        assert.ok(htmlSrc.includes("family=Inter:wght@400;500;600;700"), "Inter weights must be imported");
+        assert.ok(htmlSrc.includes("family=Space+Grotesk:wght@500;600;700"), "Space Grotesk weights must be imported");
+    });
+
+    test("Header action buttons use SVG icons without raw emoji characters", () => {
+        const btnCrown = htmlSrc.match(/<button id="btn-membership-header"[^>]*>([\s\S]*?)<\/button>/)?.[1];
+        const btnSound = htmlSrc.match(/<button id="btn-sound-toggle"[^>]*>([\s\S]*?)<\/button>/)?.[1];
+        const btnRules = htmlSrc.match(/<button id="btn-nav-rules"[^>]*>([\s\S]*?)<\/button>/)?.[1];
+        const btnSettings = htmlSrc.match(/<button id="btn-nav-settings"[^>]*>([\s\S]*?)<\/button>/)?.[1];
+
+        assert.ok(btnCrown?.includes("<svg"), "VIP Crown button must use SVG");
+        assert.ok(!btnCrown?.includes("👑"), "VIP Crown button must not have raw emoji");
+        assert.ok(btnSound?.includes("<svg"), "Sound button must use SVG");
+        assert.ok(!btnSound?.includes("🔊"), "Sound button must not have raw emoji");
+        assert.ok(btnRules?.includes("<svg"), "Rules button must use SVG");
+        assert.ok(btnSettings?.includes("<svg"), "Settings button must use SVG");
+        assert.ok(!btnSettings?.includes("⚙"), "Settings button must not have raw emoji");
+    });
+
+    test("Home Screen displays official FOURX tagline", () => {
+        assert.ok(htmlSrc.includes("FOUR PLAYERS. ONE BATTLE."), "Home hero title must display official tagline");
     });
 });
