@@ -128,4 +128,21 @@ describe("Frontend SPA Navigation & Architecture Tests", () => {
     test("Home Screen displays official FOURX tagline", () => {
         assert.ok(htmlSrc.includes("FOUR PLAYERS. ONE BATTLE."), "Home hero title must display official tagline");
     });
+
+    test("AI modal supports both Four-Player Chess and Classic Chess 1v1 with 3 difficulties", () => {
+        assert.ok(htmlSrc.includes('id="ai-modal"'), "ai-modal must exist");
+        assert.ok(htmlSrc.includes('data-mode="four_player"'), "Four-Player mode option must exist in AI modal");
+        assert.ok(htmlSrc.includes('data-mode="classic"'), "Classic 1v1 mode option must exist in AI modal");
+        assert.ok(htmlSrc.includes('data-diff="novice"'), "Novice difficulty must exist in AI modal");
+        assert.ok(htmlSrc.includes('data-diff="club"'), "Club difficulty must exist in AI modal");
+        assert.ok(htmlSrc.includes('data-diff="master"'), "Master difficulty must exist in AI modal");
+        assert.ok(htmlSrc.includes('id="btn-start-ai-match"'), "btn-start-ai-match button must exist");
+
+        const appJs = fs.readFileSync(path.join(__dirname, "../js/app.js"), "utf-8");
+        assert.ok(appJs.includes("startClassicAIMatch"), "app.js must implement startClassicAIMatch");
+        assert.ok(appJs.includes("updateAiModalUI"), "app.js must implement updateAiModalUI");
+
+        const classicJs = fs.readFileSync(path.join(__dirname, "../js/classic-chess.js"), "utf-8");
+        assert.ok(classicJs.includes("startAiGame(difficulty = null"), "classic-chess.js must support parameterized startAiGame");
+    });
 });

@@ -30,6 +30,7 @@ class QuadChessApp {
         this.classicChess = new window.ClassicChessUI(this);
         this.dailyPuzzles = new window.DailyPuzzleUI(this);
 
+        this.aiSelectedMode = "four_player";
         this.currentView = "view-home";
         this.social = new window.FOURXSocialController(this);
         this.spectator = new window.SpectatorController(this);
@@ -147,6 +148,7 @@ class QuadChessApp {
             this.switchView("view-friends");
         });
         document.getElementById("menu-item-ai")?.addEventListener("click", () => {
+            this.updateAiModalUI();
             this.showModal("ai-modal");
         });
         document.getElementById("menu-item-puzzles")?.addEventListener("click", () => {
@@ -181,6 +183,21 @@ class QuadChessApp {
             this.switchView("view-puzzles");
         });
 
+        // AI Modal Mode Selector (Four-Player vs Classic 1v1)
+        document.querySelectorAll(".ai-mode-btn").forEach(btn => {
+            btn.addEventListener("click", (e) => {
+                document.querySelectorAll(".ai-mode-btn").forEach(b => {
+                    b.classList.remove("active");
+                    b.setAttribute("aria-checked", "false");
+                });
+                const target = e.currentTarget;
+                target.classList.add("active");
+                target.setAttribute("aria-checked", "true");
+                this.aiSelectedMode = target.dataset.mode || "four_player";
+                this.updateAiModalUI();
+            });
+        });
+
         // AI Modal Diff Buttons
         document.querySelectorAll(".ai-diff-btn").forEach(btn => {
             btn.addEventListener("click", (e) => {
@@ -189,9 +206,16 @@ class QuadChessApp {
                 this.aiDifficulty = e.currentTarget.dataset.diff || "club";
             });
         });
+
         document.getElementById("btn-start-ai-match")?.addEventListener("click", () => {
             this.hideAllModals();
-            this.startAIGame(this.aiDifficulty);
+            const mode = this.aiSelectedMode || "four_player";
+            const diff = this.aiDifficulty || "club";
+            if (mode === "classic") {
+                this.startClassicAIMatch(diff);
+            } else {
+                this.startAIGame(diff);
+            }
         });
 
         // In-Game Reactions Popover Bar
@@ -411,6 +435,53 @@ class QuadChessApp {
         this.switchView("view-game");
         window.soundSystem.playGameStart();
         this.showToast("Pass & Play Match Initialized");
+    }
+
+    updateAiModalUI() {
+        const isClassic = this.aiSelectedMode === "classic";
+        const diffLabel = document.getElementById("ai-diff-label");
+        const startBtn = document.getElementById("btn-start-ai-match");
+        const subNovice = document.getElementById("ai-diff-sub-novice");
+        const subClub = document.getElementById("ai-diff-sub-club");
+        const subMaster = document.getElementById("ai-diff-sub-master");
+
+        if (diffLabel) {
+            diffLabel.textContent = isClassic 
+                ? "ENGINE SEARCH DEPTH FOR 1V1 OPPONENT" 
+                : "TACTICAL DIFFICULTY FOR 3 AI RIVALS";
+        }
+        if (startBtn) {
+            startBtn.textContent = isClassic 
+                ? "Start Classic 1v1 Match" 
+                : "Start 4-Player AI Match";
+        }
+        if (subNovice) {
+            subNovice.textContent = isClassic 
+                ? "Relaxed search, occasional tactical concessions" 
+                : "Relaxed casual play, ideal for practice";
+        }
+        if (subClub) {
+            subClub.textContent = isClassic 
+                ? "Balanced search with piece valuation & positional play" 
+                : "Balanced positional play & tactics";
+        }
+        if (subMaster) {
+            subMaster.textContent = isClassic 
+                ? "Deep iterative search, tactical calculations & defense" 
+                : "Deep search, checks & aggressive defense";
+        }
+    }
+
+    async startClassicAIMatch(difficulty = "club") {
+        const diffMap = {
+            "novice": "beginner",
+            "club": "intermediate",
+            "master": "advanced"
+        };
+        const mappedDiff = diffMap[difficulty] || difficulty || "intermediate";
+        if (this.classicChess) {
+            await this.classicChess.startAiGame(mappedDiff, "white", "10+0");
+        }
     }
 
     startAIGame(difficulty = "club") {

@@ -1423,30 +1423,77 @@
             </div>
         </div>
 
-        <!-- 4. AI Bot Config Modal -->
+        <!-- 4. AI Bot Config Modal (Unified: 4-Player & Classic 1v1) -->
         <div id="ai-modal" class="game-modal hidden">
-            <div class="modal-card">
+            <div class="modal-card ai-modal-card">
                 <div class="modal-header">
                     <h2>PLAY VS AI BOTS</h2>
                     <button class="modal-close-btn" type="button" aria-label="Close modal"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
                 </div>
                 <div class="modal-body">
-                    <p style="color:var(--color-text-secondary); margin-bottom:14px;">Select the tactical difficulty for your 3 AI rival commanders:</p>
-                    <div class="ai-difficulty-selector">
-                        <button class="ai-diff-btn active" data-diff="club">
-                            <strong>Club (1400)</strong>
-                            <small>Balanced positional play & tactics</small>
+                    <!-- Step 1: Select Game Mode -->
+                    <span class="ai-section-eyebrow">CHOOSE GAME MODE</span>
+                    <div class="ai-mode-selector" role="radiogroup" aria-label="Select Game Mode">
+                        <button type="button" class="ai-mode-btn active" data-mode="four_player" role="radio" aria-checked="true" id="ai-mode-four-player">
+                            <div class="ai-mode-icon icon-4p">
+                                <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <polygon points="12 2 15 8 22 9 17 14 18 21 12 17 6 21 7 14 2 9 9 8 12 2"/>
+                                </svg>
+                            </div>
+                            <div class="ai-mode-details">
+                                <div class="ai-mode-header-row">
+                                    <span class="ai-mode-title">Four-Player Chess</span>
+                                    <span class="ai-mode-badge badge-gold">14×14 ARENA</span>
+                                </div>
+                                <p class="ai-mode-desc">1 Human Commander vs 3 AI rivals across 160 active squares.</p>
+                            </div>
                         </button>
-                        <button class="ai-diff-btn" data-diff="master">
-                            <strong>Master (2000)</strong>
-                            <small>Aggressive checks & material defense</small>
-                        </button>
-                        <button class="ai-diff-btn" data-diff="novice">
-                            <strong>Novice (800)</strong>
-                            <small>Relaxed casual play</small>
+
+                        <button type="button" class="ai-mode-btn" data-mode="classic" role="radio" aria-checked="false" id="ai-mode-classic-1v1">
+                            <div class="ai-mode-icon icon-classic">
+                                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                                    <rect x="3" y="3" width="18" height="18" rx="2"/>
+                                    <line x1="3" y1="12" x2="21" y2="12"/>
+                                    <line x1="12" y1="3" x2="12" y2="21"/>
+                                </svg>
+                            </div>
+                            <div class="ai-mode-details">
+                                <div class="ai-mode-header-row">
+                                    <span class="ai-mode-title">Classic Chess 1v1</span>
+                                    <span class="ai-mode-badge badge-neutral">8×8 STANDARD</span>
+                                </div>
+                                <p class="ai-mode-desc">Standard 8×8 match vs 1 AI opponent (Human White vs AI Black).</p>
+                            </div>
                         </button>
                     </div>
-                    <button id="btn-start-ai-match" class="neon-btn primary-btn submit-btn" style="margin-top:16px;">Start AI Arena</button>
+
+                    <!-- Step 2: Select Tactical Difficulty -->
+                    <span class="ai-section-eyebrow" id="ai-diff-label">TACTICAL DIFFICULTY FOR 3 AI RIVALS</span>
+                    <div class="ai-difficulty-selector">
+                        <button type="button" class="ai-diff-btn" data-diff="novice">
+                            <div class="ai-diff-header">
+                                <strong>Novice</strong>
+                                <span class="ai-diff-rating">800 ELO</span>
+                            </div>
+                            <small id="ai-diff-sub-novice">Relaxed casual play, ideal for practice</small>
+                        </button>
+                        <button type="button" class="ai-diff-btn active" data-diff="club">
+                            <div class="ai-diff-header">
+                                <strong>Club</strong>
+                                <span class="ai-diff-rating">1400 ELO</span>
+                            </div>
+                            <small id="ai-diff-sub-club">Balanced positional play & tactics</small>
+                        </button>
+                        <button type="button" class="ai-diff-btn" data-diff="master">
+                            <div class="ai-diff-header">
+                                <strong>Master</strong>
+                                <span class="ai-diff-rating">2000 ELO</span>
+                            </div>
+                            <small id="ai-diff-sub-master">Deep engine search, sharp tactical replies</small>
+                        </button>
+                    </div>
+
+                    <button id="btn-start-ai-match" class="neon-btn primary-btn submit-btn" style="margin-top:16px;">Start 4-Player AI Match</button>
                 </div>
             </div>
         </div>

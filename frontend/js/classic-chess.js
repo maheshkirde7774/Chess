@@ -185,16 +185,30 @@ class ClassicChessUI {
         if (description) description.textContent = descriptions[level] || "";
     }
 
-    async startAiGame() {
+    async startAiGame(difficulty = null, humanSide = "white", timeControl = "10+0") {
         try {
+            const diffMap = {
+                "novice": "beginner",
+                "club": "intermediate",
+                "master": "advanced",
+                "beginner": "beginner",
+                "intermediate": "intermediate",
+                "advanced": "advanced",
+                "expert": "expert"
+            };
+            const selectedDiff = difficulty || document.getElementById("classic-ai-difficulty")?.value || "intermediate";
+            const mappedDiff = diffMap[selectedDiff] || selectedDiff || "intermediate";
+            const side = humanSide || document.getElementById("classic-ai-side")?.value || "white";
+            const control = timeControl || document.getElementById("classic-ai-time-control")?.value || "10+0";
+
             const data = await this.request("/classic/rooms", {
                 method: "POST",
                 body: JSON.stringify({
                     player_name: this.playerName,
-                    time_control: document.getElementById("classic-ai-time-control")?.value || "10+0",
+                    time_control: control,
                     mode: "ai",
-                    human_side: document.getElementById("classic-ai-side")?.value || "white",
-                    ai_difficulty: document.getElementById("classic-ai-difficulty")?.value || "intermediate",
+                    human_side: side,
+                    ai_difficulty: mappedDiff,
                 }),
             });
             this.enterRoom(data, "ai");
