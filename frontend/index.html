@@ -76,45 +76,67 @@
                         <div class="hero-content-wrapper">
                             <!-- Staunton Visual Showcase on Quadrant Pedestal -->
                             <div class="pedestal-stage" aria-hidden="true">
-                                <div class="pedestal-quadrant-glow south-glow"></div>
-                                <div class="pedestal-quadrant-glow west-glow"></div>
-                                <div class="pedestal-quadrant-glow north-glow"></div>
-                                <div class="pedestal-quadrant-glow east-glow"></div>
+                                <div class="pedestal-ambient-halo"></div>
+                                <div class="pedestal-quadrant-glow south-glow" title="East / Amber Army"></div>
+                                <div class="pedestal-quadrant-glow west-glow" title="West / Purple Army"></div>
+                                <div class="pedestal-quadrant-glow north-glow" title="North / Lime Army"></div>
+                                <div class="pedestal-quadrant-glow east-glow" title="South / Gold Army"></div>
                                 <div class="pedestal-piece-box">
-                                    <svg viewBox="0 0 100 100" class="hero-staunton-piece" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Chess King piece">
+                                    <svg viewBox="0 0 100 100" class="hero-staunton-piece" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="FOURX Chess King piece">
                                         <defs>
                                             <linearGradient id="heroKingGrad" x1="0%" y1="0%" x2="100%" y2="100%">
                                                 <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.98"/>
-                                                <stop offset="50%" stop-color="#E8E8E8" stop-opacity="0.94"/>
-                                                <stop offset="100%" stop-color="#CCCCCC" stop-opacity="0.90"/>
+                                                <stop offset="45%" stop-color="#ECECEC" stop-opacity="0.95"/>
+                                                <stop offset="100%" stop-color="#CCCCCC" stop-opacity="0.92"/>
                                             </linearGradient>
-                                            <radialGradient id="gemGold" cx="50%" cy="50%" r="50%">
-                                                <stop offset="0%" stop-color="#E8C96A" stop-opacity="1"/>
-                                                <stop offset="100%" stop-color="#D4AF37" stop-opacity="0.85"/>
+                                            <linearGradient id="purpleVelvet" x1="0%" y1="0%" x2="100%" y2="100%">
+                                                <stop offset="0%" stop-color="#C084FC"/>
+                                                <stop offset="50%" stop-color="#9333EA"/>
+                                                <stop offset="100%" stop-color="#6B21A8"/>
+                                            </linearGradient>
+                                            <linearGradient id="goldTrim" x1="0%" y1="0%" x2="100%" y2="100%">
+                                                <stop offset="0%" stop-color="#F5E08B"/>
+                                                <stop offset="50%" stop-color="#D4AF37"/>
+                                                <stop offset="100%" stop-color="#9A7B1C"/>
+                                            </linearGradient>
+                                            <radialGradient id="gemPurple" cx="50%" cy="50%" r="50%">
+                                                <stop offset="0%" stop-color="#E9D5FF"/>
+                                                <stop offset="60%" stop-color="#A855F7"/>
+                                                <stop offset="100%" stop-color="#6B21A8"/>
                                             </radialGradient>
-                                            <filter id="heroPieceShadow" x="-15%" y="-15%" width="130%" height="130%">
+                                            <filter id="heroPieceShadow" x="-20%" y="-20%" width="140%" height="140%">
                                                 <feDropShadow dx="0" dy="3" stdDeviation="3.5" flood-color="#000000" flood-opacity="0.85"/>
                                             </filter>
                                         </defs>
                                         <g filter="url(#heroPieceShadow)">
                                             <!-- Cross Finial in Pure Gold -->
-                                            <path d="M50 11 L50 24 M43.5 17.5 L56.5 17.5" stroke="#D4AF37" stroke-width="4.2" stroke-linecap="round"/>
-                                            <!-- Crown Peak in Gold -->
-                                            <circle cx="50" cy="25" r="3.8" fill="#D4AF37"/>
-                                            <!-- Imperial Diadem & Arches -->
-                                            <path d="M26 38 C32 30, 42 27, 50 27 C58 27, 68 30, 74 38 C72 52, 75 64, 73 72 L27 72 C25 64, 28 52, 26 38 Z"
-                                                  fill="url(#heroKingGrad)" stroke="#191919" stroke-width="2.5" stroke-linejoin="round"/>
-                                            <!-- Player Signature Accent Gem in Gold -->
-                                            <polygon points="50,33 55,42 50,51 45,42" fill="url(#gemGold)" stroke="#080808" stroke-width="1.2"/>
-                                            <circle cx="50" cy="42" r="2.2" fill="#FFFFFF" fill-opacity="0.95"/>
-                                            <!-- Diadem Filigree with Gold Accents -->
-                                            <path d="M34 44 C38 41, 44 41, 46 45" stroke="#D4AF37" stroke-width="2" fill="none" stroke-linecap="round"/>
-                                            <path d="M66 44 C62 41, 56 41, 54 45" stroke="#D4AF37" stroke-width="2" fill="none" stroke-linecap="round"/>
-                                            <!-- Collar Ring -->
-                                            <rect x="24" y="72" width="52" height="7" rx="3" fill="#252525" stroke="#101010" stroke-width="2"/>
-                                            <rect x="28" y="73.5" width="44" height="4" rx="2" fill="#D4AF37" fill-opacity="0.85"/>
-                                            <!-- Weighted Base Plinth in Near Black -->
-                                            <path d="M20 79 L80 79 C82 85, 78 88, 76 90 L24 90 C22 88, 18 85, 20 79 Z" fill="#141414" stroke="#080808" stroke-width="2"/>
+                                            <path d="M50 11 L50 23 M44 17 L56 17" stroke="url(#goldTrim)" stroke-width="3.8" stroke-linecap="round"/>
+                                            <!-- Crown Peak Orb in Gold -->
+                                            <circle cx="50" cy="24" r="3.2" fill="url(#goldTrim)"/>
+                                            <!-- Imperial Velvet Cap Interior (Purple Accent) -->
+                                            <path d="M28 36 C34 27, 42 25, 50 25 C58 25, 66 27, 72 36 C71 47, 72 57, 71 66 L29 66 C28 57, 29 47, 28 36 Z" 
+                                                  fill="url(#purpleVelvet)" stroke="#581C87" stroke-width="1.4"/>
+                                            <!-- Staunton Imperial Crown Arches (Platinum/Ivory with Dark Trim) -->
+                                            <path d="M26 37 C31 31, 38 29, 44 32 C46 36, 47 43, 47 50 L31 50 C29 45, 27 41, 26 37 Z" 
+                                                  fill="url(#heroKingGrad)" stroke="#1A1A1A" stroke-width="1.2"/>
+                                            <path d="M74 37 C69 31, 62 29, 56 32 C54 36, 53 43, 53 50 L69 50 C71 45, 73 41, 74 37 Z" 
+                                                  fill="url(#heroKingGrad)" stroke="#1A1A1A" stroke-width="1.2"/>
+                                            <path d="M47 30 C49 26, 51 26, 53 30 L53 50 L47 50 Z" 
+                                                  fill="url(#heroKingGrad)" stroke="#1A1A1A" stroke-width="1.2"/>
+                                            <!-- Central Imperial Gem (Purple Amethyst & Gold) -->
+                                            <polygon points="50,33 55,41 50,49 45,41" fill="url(#gemPurple)" stroke="url(#goldTrim)" stroke-width="1.4"/>
+                                            <circle cx="50" cy="41" r="1.8" fill="#FFFFFF" fill-opacity="0.95"/>
+                                            <!-- Gold Filigree Ribbons -->
+                                            <path d="M33 44 C37 41, 43 41, 46 45" stroke="url(#goldTrim)" stroke-width="2" fill="none" stroke-linecap="round"/>
+                                            <path d="M67 44 C63 41, 57 41, 54 45" stroke="url(#goldTrim)" stroke-width="2" fill="none" stroke-linecap="round"/>
+                                            <!-- Waist Band in Ivory -->
+                                            <path d="M29 66 C35 64, 65 64, 71 66 L69 72 L31 72 Z" fill="url(#heroKingGrad)" stroke="#1A1A1A" stroke-width="1.3"/>
+                                            <!-- Gold Imperial Collar -->
+                                            <rect x="25" y="71" width="50" height="6.5" rx="3" fill="#1C1917" stroke="url(#goldTrim)" stroke-width="1.6"/>
+                                            <rect x="28" y="72.5" width="44" height="3.5" rx="1.6" fill="url(#goldTrim)"/>
+                                            <!-- Weighted Base Plinth (Clean clearance at bottom: base rests at y=85, viewBox extends to 100) -->
+                                            <path d="M22 77.5 L78 77.5 C80 82, 76 85, 73 86 L27 86 C24 85, 20 82, 22 77.5 Z" fill="#141414" stroke="url(#goldTrim)" stroke-width="1.6"/>
+                                            <line x1="25" y1="82" x2="75" y2="82" stroke="#D4AF37" stroke-width="1" stroke-opacity="0.6"/>
                                         </g>
                                     </svg>
                                 </div>
@@ -125,13 +147,13 @@
                                     <span class="hero-eyebrow">FOURX ARENA</span>
                                     <span class="hero-version-chip">14×14 CROSS ARENA</span>
                                 </div>
-                                <h2 class="hero-app-title">FOUR PLAYERS. ONE BATTLE.</h2>
-                                <p class="hero-app-tagline">Conquer the 160-square battlefield in live four-player combat or standard 1v1 chess.</p>
+                                <h2 class="hero-app-title">Four Armies. One Crown.</h2>
+                                <p class="hero-app-tagline">Four Players. One Battle. Conquer the 160-square battlefield in live four-player combat or standard 1v1 chess.</p>
                                 <div class="hero-arena-tags">
                                     <span class="arena-tag-chip">160 Active Squares</span>
                                     <span class="arena-tag-chip">4 Distinct Armies</span>
                                     <span class="arena-tag-chip">Clockwise Turns</span>
-                                    <span class="arena-tag-chip">Classic 1v1 Mode</span>
+                                    <span class="arena-tag-chip">1v1 Classic Mode</span>
                                 </div>
                             </div>
                         </div>

@@ -66,6 +66,10 @@ describe("Frontend SPA Navigation & Architecture Tests", () => {
         assert.ok(htmlSrc.includes('class="hero-staunton-piece"'), "hero-staunton-piece SVG must exist");
         assert.ok(htmlSrc.includes('class="hero-titles"'), "hero-titles container must exist");
         assert.ok(htmlSrc.includes('class="hero-app-title"'), "hero-app-title must exist");
+        assert.ok(htmlSrc.includes("Four Armies. One Crown."), "hero-app-title must contain 'Four Armies. One Crown.'");
+        assert.ok(htmlSrc.includes("FOURX ARENA"), "Eyebrow must contain FOURX ARENA");
+        assert.ok(htmlSrc.includes("14×14 CROSS ARENA"), "Badge must contain 14×14 CROSS ARENA");
+        assert.ok(htmlSrc.includes("purpleVelvet") && htmlSrc.includes("gemPurple"), "King illustration must feature purple accents");
         assert.ok(htmlSrc.includes('class="hero-arena-tags"'), "hero-arena-tags chips must exist");
         assert.ok(!htmlSrc.includes('class="hero-showcase-panel"'), "Orphaned empty hero-showcase-panel must be removed");
     });

@@ -279,13 +279,17 @@ html, body {
 
 /* 1. Hero Presentation Card (Black + Gold Tournament Luxury) */
 .home-hero-card {
-    background: linear-gradient(145deg, #181818 0%, #111111 55%, #080808 100%);
-    border: 1px solid rgba(212, 175, 55, 0.26);
+    background: linear-gradient(145deg, #181818 0%, #121212 55%, #0A0A0A 100%);
+    border: 1px solid rgba(212, 175, 55, 0.28);
     border-radius: var(--radius-xl);
-    padding: clamp(18px, 4vw, 26px);
+    padding: 24px 28px;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.05);
     position: relative;
     overflow: hidden;
+    flex-shrink: 0;
+    min-height: 140px;
+    display: flex;
+    align-items: center;
 }
 
 .home-hero-card::after {
@@ -293,130 +297,144 @@ html, body {
     position: absolute;
     top: 0;
     right: 0;
-    width: 280px;
+    width: 320px;
     height: 100%;
-    background: radial-gradient(circle at top right, rgba(212, 175, 55, 0.08) 0%, transparent 70%);
+    background: radial-gradient(circle at top right, rgba(212, 175, 55, 0.09) 0%, transparent 70%);
     pointer-events: none;
 }
 
 .hero-content-wrapper {
     display: flex;
     align-items: center;
-    gap: clamp(16px, 3.5vw, 28px);
+    gap: 28px;
     width: 100%;
     position: relative;
     z-index: 1;
 }
 
+.pedestal-stage {
+    position: relative;
+    width: 112px;
+    height: 112px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 50% 35%, #262626 0%, #161616 55%, #0C0C0C 100%);
+    border: 2px solid rgba(212, 175, 55, 0.35);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.9), 0 8px 24px rgba(0, 0, 0, 0.65), 0 0 16px rgba(212, 175, 55, 0.12);
+    flex-shrink: 0;
+}
+
+.pedestal-ambient-halo {
+    position: absolute;
+    inset: 6px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(168, 85, 247, 0.18) 0%, rgba(212, 175, 55, 0.08) 50%, transparent 75%);
+    pointer-events: none;
+}
+
+.pedestal-quadrant-glow {
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    z-index: 3;
+}
+/* Four Armies Ambient Glow Nodes (East=Gold, West=Purple, North=Lime, South=Amber/Coral — Zero Blue) */
+.pedestal-quadrant-glow.south-glow { bottom: 5px; left: calc(50% - 4px); background: #F59E0B; box-shadow: 0 0 8px #F59E0B; }
+.pedestal-quadrant-glow.west-glow { left: 5px; top: calc(50% - 4px); background: #A855F7; box-shadow: 0 0 8px #A855F7; }
+.pedestal-quadrant-glow.north-glow { top: 5px; left: calc(50% - 4px); background: #10B981; box-shadow: 0 0 8px #10B981; }
+.pedestal-quadrant-glow.east-glow { right: 5px; top: calc(50% - 4px); background: #D4AF37; box-shadow: 0 0 8px #D4AF37; }
+
+.pedestal-piece-box {
+    width: 82%;
+    height: 82%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    z-index: 2;
+}
+
+.hero-staunton-piece {
+    width: 100%;
+    height: 100%;
+    display: block;
+    filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.85));
+}
+
+.hero-titles {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+}
+
 .hero-eyebrow-row {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
     flex-wrap: wrap;
 }
 
 .hero-eyebrow {
     font-family: var(--font-heading);
-    font-size: 0.72rem;
+    font-size: 0.74rem;
     font-weight: 700;
-    letter-spacing: 0.12em;
+    letter-spacing: 0.14em;
     color: var(--color-gold);
     text-transform: uppercase;
 }
 
 .hero-version-chip {
     font-family: var(--font-heading);
-    font-size: 0.64rem;
+    font-size: 0.65rem;
     font-weight: 700;
     letter-spacing: 0.08em;
     color: var(--color-gold-light);
     background: rgba(212, 175, 55, 0.12);
-    border: 1px solid rgba(212, 175, 55, 0.32);
-    padding: 2px 8px;
+    border: 1px solid rgba(212, 175, 55, 0.35);
+    padding: 3px 9px;
     border-radius: var(--radius-full);
-}
-
-.hero-titles {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    flex: 1;
-    min-width: 0;
 }
 
 .hero-app-title {
     font-family: var(--font-heading);
-    font-size: clamp(1.35rem, 3.6vw, 1.95rem);
+    font-size: clamp(1.4rem, 3.4vw, 1.95rem);
     font-weight: 700;
     letter-spacing: -0.01em;
     color: #FFFFFF;
     margin: 0;
-    line-height: 1.2;
+    line-height: 1.22;
 }
 
 .hero-app-tagline {
     font-family: var(--font-body);
-    font-size: clamp(0.82rem, 1.8vw, 0.92rem);
+    font-size: clamp(0.84rem, 1.6vw, 0.94rem);
     color: var(--color-text-secondary);
     margin: 0;
-    line-height: 1.45;
+    line-height: 1.5;
     font-weight: 400;
-}
-
-.pedestal-stage {
-    position: relative;
-    width: clamp(68px, 11vw, 84px);
-    height: clamp(68px, 11vw, 84px);
-    border-radius: 50%;
-    background: radial-gradient(circle, #222222 0%, #101010 100%);
-    border: 2px solid #282828;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.8), 0 6px 20px rgba(0, 0, 0, 0.6);
-    flex-shrink: 0;
-}
-
-.pedestal-quadrant-glow {
-    position: absolute;
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-}
-.pedestal-quadrant-glow.south-glow { bottom: 4px; left: calc(50% - 3.5px); background: var(--color-p1); box-shadow: 0 0 6px var(--color-p1); }
-.pedestal-quadrant-glow.west-glow { left: 4px; top: calc(50% - 3.5px); background: var(--color-p2); box-shadow: 0 0 6px var(--color-p2); }
-.pedestal-quadrant-glow.north-glow { top: 4px; left: calc(50% - 3.5px); background: var(--color-p3); box-shadow: 0 0 6px var(--color-p3); }
-.pedestal-quadrant-glow.east-glow { right: 4px; top: calc(50% - 3.5px); background: var(--color-p4); box-shadow: 0 0 6px var(--color-p4); }
-
-.pedestal-piece-box {
-    width: 60%;
-    height: 60%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.hero-staunton-piece {
-    width: 100%;
-    height: 100%;
-    filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.7));
+    max-width: 640px;
 }
 
 .hero-arena-tags {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
+    gap: 7px;
     margin-top: 4px;
 }
 
 .arena-tag-chip {
     font-family: var(--font-body);
-    font-size: 0.7rem;
+    font-size: 0.72rem;
     font-weight: 500;
     color: #D4D4D4;
     background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    padding: 3px 10px;
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    padding: 3px 11px;
     border-radius: var(--radius-full);
     letter-spacing: 0.02em;
     white-space: nowrap;
@@ -2840,19 +2858,69 @@ button:focus-visible {
     color: var(--color-text-primary);
 }
 
-/* Touch-friendly minimum tap target on mobile */
-@media (max-width: 768px) {
+/* Touch-friendly minimum tap target & responsive hero on mobile */
+@media (max-width: 680px) {
     .menu-card { min-height: 70px; }
-    .home-scrollable { gap: 10px; padding: 12px; padding-bottom: 90px; }
-    .home-hero-card { padding: 14px 16px; }
-    .hero-content-wrapper { gap: 14px; align-items: center; }
+    .home-scrollable { gap: 12px; padding: 12px; padding-bottom: 90px; }
+    .home-hero-card {
+        padding: 20px 16px;
+        min-height: auto;
+    }
+    .hero-content-wrapper {
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        gap: 16px;
+    }
+    .pedestal-stage {
+        width: 88px;
+        height: 88px;
+        flex-shrink: 0;
+        margin: 0 auto;
+    }
+    .pedestal-piece-box {
+        width: 82%;
+        height: 82%;
+    }
+    .hero-titles {
+        align-items: center;
+        gap: 8px;
+    }
+    .hero-eyebrow-row {
+        justify-content: center;
+        gap: 8px;
+    }
+    .hero-app-title {
+        font-size: 1.35rem;
+        line-height: 1.25;
+        text-align: center;
+    }
+    .hero-app-tagline {
+        font-size: 0.82rem;
+        line-height: 1.45;
+        text-align: center;
+    }
+    .hero-arena-tags {
+        justify-content: center;
+        gap: 5px;
+    }
+    .arena-tag-chip {
+        font-size: 0.68rem;
+        padding: 3px 9px;
+    }
     .main-menu-grid { grid-template-columns: 1fr; }
-    .hero-app-title { font-size: clamp(1.15rem, 4.5vw, 1.35rem); }
-    .hero-app-tagline { font-size: 0.78rem; }
-    .pedestal-stage { width: 56px; height: 56px; flex-shrink: 0; }
-    .pedestal-piece-box { width: 38px; height: 38px; }
-    .hero-arena-tags { gap: 4px; }
-    .arena-tag-chip { font-size: 0.65rem; padding: 2px 8px; }
+}
+
+/* Tablet adaptive layout */
+@media (min-width: 681px) and (max-width: 768px) {
+    .menu-card { min-height: 70px; }
+    .home-scrollable { gap: 12px; padding: 14px 18px; padding-bottom: 90px; }
+    .home-hero-card { padding: 20px 22px; }
+    .hero-content-wrapper { gap: 20px; align-items: center; }
+    .pedestal-stage { width: 96px; height: 96px; flex-shrink: 0; }
+    .pedestal-piece-box { width: 80%; height: 80%; }
+    .hero-app-title { font-size: 1.5rem; }
+    .main-menu-grid { grid-template-columns: 1fr; }
 }
 
 /* Tablet & Desktop: two-column menu grid */
