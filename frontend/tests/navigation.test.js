@@ -145,4 +145,13 @@ describe("Frontend SPA Navigation & Architecture Tests", () => {
         const classicJs = fs.readFileSync(path.join(__dirname, "../js/classic-chess.js"), "utf-8");
         assert.ok(classicJs.includes("startAiGame(difficulty = null"), "classic-chess.js must support parameterized startAiGame");
     });
+
+    test("Classic 1v1 and Spectator UI adhere strictly to Black + Gold design system", () => {
+        const styleCss = fs.readFileSync(path.join(__dirname, "../css/style.css"), "utf-8");
+        assert.ok(!styleCss.includes("#222b38"), "style.css must not contain legacy blue #222b38");
+        assert.ok(!styleCss.includes("#10131b"), "style.css must not contain legacy navy #10131b");
+        assert.ok(!styleCss.includes("#171b25"), "style.css must not contain legacy navy #171b25");
+        assert.ok(!styleCss.includes('"Times New Roman", serif'), "Captured pieces must not use Times New Roman");
+        assert.ok(styleCss.includes("tabular-nums"), "Clocks and stats must use tabular-nums");
+    });
 });
