@@ -1,6 +1,6 @@
 """
 FOURX Authentication & Account Management
-Implements registration, email/password login, Google OAuth, Facebook OAuth architecture,
+Implements registration, email/password login, Google OAuth,
 password reset, and secure session management.
 """
 
@@ -115,11 +115,6 @@ class ResetPasswordRequest(BaseModel):
 
 class GoogleAuthRequest(BaseModel):
     credential: Optional[str] = None
-    code: Optional[str] = None
-
-
-class FacebookAuthRequest(BaseModel):
-    access_token: Optional[str] = None
     code: Optional[str] = None
 
 
@@ -459,7 +454,7 @@ def auth_status(
             "is_registered": False,
             "profile": None,
         }
-    is_registered = bool(profile.email or profile.google_sub or profile.facebook_id)
+    is_registered = bool(profile.email or profile.google_sub or getattr(profile, "facebook_id", None))
     return {
         "authenticated": True,
         "is_registered": is_registered,
@@ -764,192 +759,3 @@ def google_oauth_callback(
     except Exception as exc:
         logger.warning("Google callback error: %s", exc)
         return RedirectResponse(url="/?auth_error=google_failed")
-        return RedirectResponse(url="/?auth_error=google_failed")
-
-
-# ==============================================================================
-# Facebook OAuth Integration (Prepared for Credentials)
-# ==============================================================================
-
-@router.get("/facebook/url")
-def facebook_oauth_url(http_request: Request):
-    """Returns Facebook OAuth authorization URL if configured."""
-    client_id = os.getenv("FACEBOOK_CLIENT_ID")
-    if not client_id:
-        return {
-            "configured": False,
-            "message": "Facebook Login is pending credentials. Set FACEBOOK_CLIENT_ID and FACEBOOK_CLIENT_SECRET.",
-        }
-
-    base_url = str(http_request.base_url).rstrip("/")
-    redirect_uri = f"{base_url}/api/auth/facebook/callback"
-
-    params = {
-        "client_id": client_id,
-        "redirect_uri": redirect_uri,
-        "scope": "email,public_profile",
-        "response_type": "code",
-    }
-    url = f"https://www.facebook.com/v19.0/dialog/oauth?{urlencode(params)}"
-    return {"configured": True, "url": url}
-
-
-@router.post("/facebook")
-def facebook_token_login(
-    req: FacebookAuthRequest,
-    http_request: Request,
-    authorization: Optional[str] = Header(default=None),
-    db: Session = Depends(get_db),
-):
-    """Authenticates using Facebook access token from SDK."""
-    client_id = os.getenv("FACEBOOK_CLIENT_ID")
-    if not client_id and not req.access_token:
-        raise HTTPException(
-            status_code=503,
-            detail="Facebook Login is pending configuration. Set FACEBOOK_CLIENT_ID and FACEBOOK_CLIENT_SECRET."
-        )
-
-    if not req.access_token:
-        raise HTTPException(status_code=422, detail="Facebook access token is required")
-
-    try:
-        url = f"https://graph.facebook.com/v19.0/me?fields=id,name,email&access_token={req.access_token}"
-        req_obj = URLRequest(url, headers={"User-Agent": "FOURX-Chess/1.0"})
-        with urlopen(req_obj, timeout=8) as response:
-            payload = json.loads(response.read().decode("utf-8"))
-    except Exception as e:
-        logger.warning("Facebook token verification failed: %s", e)
-        raise HTTPException(status_code=401, detail="Facebook authentication failed") from None
-
-    fb_id = payload.get("id")
-    email = payload.get("email", "").lower()
-    name = payload.get("name") or "Commander"
-
-    if not fb_id:
-        raise HTTPException(status_code=400, detail="Invalid Facebook user data")
-
-    profile = db.query(PlayerProfileModel).filter(
-        PlayerProfileModel.facebook_id == fb_id,
-        PlayerProfileModel.deleted_at.is_(None)
-    ).first()
-
-    if not profile and email:
-        profile = db.query(PlayerProfileModel).filter(
-            PlayerProfileModel.email_key == email,
-            PlayerProfileModel.deleted_at.is_(None)
-        ).first()
-        if profile:
-            profile.facebook_id = fb_id
-
-    current_profile = profile_from_authorization(authorization, db)
-
-    if not profile:
-        if current_profile and not current_profile.email and not current_profile.facebook_id:
-            profile = current_profile
-            profile.full_name = name
-            if email:
-                profile.email = email
-                profile.email_key = email
-            profile.facebook_id = fb_id
-            profile.auth_provider = "facebook"
-        else:
-            import uuid
-            suffix = secrets.randbelow(900_000) + 100_000
-            username = f"Commander{suffix}"
-            profile = PlayerProfileModel(
-                id=str(uuid.uuid4()),
-                full_name=name,
-                username=username,
-                username_key=username.casefold(),
-                email=email if email else None,
-                email_key=email if email else None,
-                facebook_id=fb_id,
-                auth_provider="facebook",
-                avatar="knight",
-                token_hash=_token_hash(secrets.token_urlsafe(48)),
-                created_at=datetime.now(timezone.utc),
-            )
-            db.add(profile)
-
-    db.commit()
-    raw_token = create_user_session(profile, db, http_request)
-    return {
-        "success": True,
-        "access_token": raw_token,
-        "profile": _profile_payload(db, profile),
-        "message": f"Signed in with Facebook as {profile.username}!",
-    }
-
-
-@router.get("/facebook/callback")
-def facebook_oauth_callback(
-    code: Optional[str] = None,
-    error: Optional[str] = None,
-    http_request: Request = None,
-    db: Session = Depends(get_db),
-):
-    """Handles Facebook OAuth authorization code callback."""
-    if error or not code:
-        return RedirectResponse(url="/?auth_error=facebook_denied")
-
-    client_id = os.getenv("FACEBOOK_CLIENT_ID")
-    client_secret = os.getenv("FACEBOOK_CLIENT_SECRET")
-    if not client_id or not client_secret:
-        return RedirectResponse(url="/?auth_error=facebook_not_configured")
-
-    base_url = str(http_request.base_url).rstrip("/")
-    redirect_uri = f"{base_url}/api/auth/facebook/callback"
-
-    try:
-        params = {
-            "client_id": client_id,
-            "client_secret": client_secret,
-            "redirect_uri": redirect_uri,
-            "code": code,
-        }
-        url = f"https://graph.facebook.com/v19.0/oauth/access_token?{urlencode(params)}"
-        with urlopen(URLRequest(url), timeout=10) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-        access_token = data.get("access_token")
-        if not access_token:
-            return RedirectResponse(url="/?auth_error=facebook_exchange_failed")
-
-        # Fetch profile
-        info_url = f"https://graph.facebook.com/v19.0/me?fields=id,name,email&access_token={access_token}"
-        with urlopen(URLRequest(info_url), timeout=8) as resp:
-            payload = json.loads(resp.read().decode("utf-8"))
-
-        fb_id = payload.get("id")
-        email = payload.get("email", "").lower()
-        name = payload.get("name") or "Commander"
-
-        profile = db.query(PlayerProfileModel).filter(
-            (PlayerProfileModel.facebook_id == fb_id) | (PlayerProfileModel.email_key == email if email else False),
-            PlayerProfileModel.deleted_at.is_(None)
-        ).first()
-
-        if not profile:
-            import uuid
-            suffix = secrets.randbelow(900_000) + 100_000
-            username = f"Commander{suffix}"
-            profile = PlayerProfileModel(
-                id=str(uuid.uuid4()),
-                full_name=name,
-                username=username,
-                username_key=username.casefold(),
-                email=email if email else None,
-                email_key=email if email else None,
-                facebook_id=fb_id,
-                auth_provider="facebook",
-                avatar="knight",
-                token_hash=_token_hash(secrets.token_urlsafe(48)),
-                created_at=datetime.now(timezone.utc),
-            )
-            db.add(profile)
-
-        db.commit()
-        raw_token = create_user_session(profile, db, http_request)
-        return RedirectResponse(url=f"/?auth_token={raw_token}")
-    except Exception as exc:
-        logger.warning("Facebook callback error: %s", exc)
-        return RedirectResponse(url="/?auth_error=facebook_failed")

@@ -6,10 +6,11 @@ from fastapi import HTTPException
 
 from app.db import init_db, SessionLocal, PlayerProfileModel, ActiveSessionModel
 from app.auth import (
+    router as auth_router,
     hash_password, verify_password,
     register_account, login_account, logout_account,
     forgot_password, reset_password, auth_status,
-    google_oauth_url, facebook_oauth_url, google_client_config,
+    google_oauth_url, google_client_config,
     google_token_login, verify_google_id_token,
     RegisterRequest, LoginRequest, ForgotPasswordRequest, ResetPasswordRequest, GoogleAuthRequest
 )
@@ -426,9 +427,11 @@ def test_oauth_url_generation(fake_request):
     assert "https://accounts.google.com/o/oauth2/v2/auth" in g_res["url"]
     assert "test-client-id.apps.googleusercontent.com" in g_res["url"]
 
-    # Facebook OAuth with env variable set
-    os.environ["FACEBOOK_CLIENT_ID"] = "test-fb-app-id"
-    fb_res = facebook_oauth_url(fake_request)
-    assert fb_res["configured"] is True
-    assert "https://www.facebook.com/v19.0/dialog/oauth" in fb_res["url"]
-    assert "test-fb-app-id" in fb_res["url"]
+
+def test_facebook_routes_completely_removed():
+    route_paths = [getattr(r, "path", "") for r in auth_router.routes]
+    facebook_paths = [p for p in route_paths if "facebook" in p.lower()]
+    assert len(facebook_paths) == 0, f"Found active Facebook routes: {facebook_paths}"
+    # Verify Google routes still exist
+    google_paths = [p for p in route_paths if "google" in p.lower()]
+    assert len(google_paths) >= 2, f"Expected Google routes, found: {google_paths}"

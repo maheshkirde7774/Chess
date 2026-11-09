@@ -14,7 +14,9 @@ describe("FOURX Authentication System Frontend Tests", () => {
         assert.ok(htmlSrc.includes('id="tab-auth-login"'), "Sign In tab button must exist");
         assert.ok(htmlSrc.includes('id="tab-auth-register"'), "Create Account tab button must exist");
         assert.ok(htmlSrc.includes('id="btn-google-login"'), "Google OAuth button must exist");
-        assert.ok(htmlSrc.includes('id="btn-facebook-login"'), "Facebook OAuth button must exist");
+        assert.ok(!htmlSrc.includes('id="btn-facebook-login"'), "Facebook OAuth button must be completely removed");
+        assert.ok(!htmlSrc.includes('Continue with Facebook'), "Facebook text must not exist in index.html");
+        assert.ok(!authJsSrc.includes('handleFacebookLogin'), "handleFacebookLogin must not exist in auth.js");
         assert.ok(htmlSrc.includes('id="form-auth-login"'), "Sign in form must exist");
         assert.ok(htmlSrc.includes('id="form-auth-register"'), "Register form must exist");
         assert.ok(htmlSrc.includes('id="panel-auth-forgot"'), "Forgot password panel must exist");

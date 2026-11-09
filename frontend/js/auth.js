@@ -1,7 +1,7 @@
 /**
  * FOURX Authentication & Account Controller
  * Manages user registration, email/username login, password reset,
- * session management, Google OAuth & Facebook OAuth handling, and profile synchronization.
+ * session management, Google OAuth handling, and profile synchronization.
  */
 
 class FOURXAuth {
@@ -250,7 +250,6 @@ class FOURXAuth {
 
         // Social Buttons
         document.getElementById("btn-google-login")?.addEventListener("click", () => this.handleGoogleLogin());
-        document.getElementById("btn-facebook-login")?.addEventListener("click", () => this.handleFacebookLogin());
     }
 
     showAuthView(tab = "login") {
@@ -710,23 +709,6 @@ class FOURXAuth {
                 submitBtn.disabled = false;
                 submitBtn.textContent = "Sign In to FOURX";
             }
-        }
-    }
-
-    async handleFacebookLogin() {
-        this.clearAlert();
-        try {
-            const data = await this.request("/api/auth/facebook/url");
-            if (data.configured && data.url) {
-                window.location.href = data.url;
-            } else {
-                this.showAlert(
-                    "Facebook Login is prepared on the backend and awaiting your FACEBOOK_CLIENT_ID environment variable. Once configured, Facebook authentication will be immediately available.",
-                    "info"
-                );
-            }
-        } catch (err) {
-            this.showAlert("Could not initialize Facebook OAuth. Please check your network connection.");
         }
     }
 
